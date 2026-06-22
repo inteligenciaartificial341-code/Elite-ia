@@ -386,20 +386,112 @@
 
 
 
-  /* Standalone iOS — empurra header abaixo do notch e input acima da barra home */
+  /* Standalone — safe areas universais (adapta a qualquer dispositivo) */
   .ios-standalone .chat-header {
-    padding-top: calc(14px + env(safe-area-inset-top, 44px));
+    padding-top: calc(14px + env(safe-area-inset-top));
   }
   .ios-standalone .chat-input-area {
-    padding-bottom: calc(18px + env(safe-area-inset-bottom, 34px));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
   }
   .ios-standalone #login-screen {
-    padding-top: calc(24px + env(safe-area-inset-top, 44px));
-    padding-bottom: calc(24px + env(safe-area-inset-bottom, 34px));
+    padding-top: calc(24px + env(safe-area-inset-top));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
   }
   .ios-standalone .sidebar-header {
-    padding-top: calc(20px + env(safe-area-inset-top, 44px));
+    padding-top: calc(20px + env(safe-area-inset-top));
   }
+
+
+  /* ── THINKING STREAM ── */
+  .thinking-stream {
+    background: var(--card-bg);
+    border-radius: 16px 16px 16px 4px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    min-width: 240px;
+    max-width: 88%;
+  }
+
+  .thinking-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #2a4a50;
+    border-bottom: 1px solid rgba(26,95,110,0.08);
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .thinking-step:last-child { border-bottom: none; }
+  .thinking-step.visible { opacity: 1; transform: translateY(0); }
+  .thinking-step.done .step-icon-wrap { opacity: 0.5; }
+
+  /* Ícone SVG slim da etapa (lupa, engrenagem, etc) */
+  .step-icon {
+    flex-shrink: 0;
+    color: #1a5f6e;
+    opacity: 0.8;
+  }
+
+  .step-text { flex: 1; line-height: 1.4; }
+  .step-text.done { color: #888; }
+
+  /* Shield com flocos animados */
+  .shield-thinking {
+    flex-shrink: 0;
+    position: relative;
+    width: 28px;
+    height: 32px;
+  }
+  .shield-thinking svg.shield-outline {
+    position: absolute;
+    top: 0; left: 0;
+    width: 28px; height: 32px;
+  }
+  /* Os 3 flocos que passam dentro do escudo */
+  .flake-container {
+    position: absolute;
+    top: 50%; left: 0;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 14px;
+    overflow: hidden;
+  }
+  .flake {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0; /* usar SVG inline */
+  }
+  .flake svg {
+    width: 7px;
+    height: 7px;
+    opacity: 0.85;
+  }
+
+  /* Animação: entra pela esquerda, sai pela direita */
+  @keyframes flakePass {
+    0%   { left: -8px; opacity: 0; }
+    15%  { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { left: 30px; opacity: 0; }
+  }
+  .flake:nth-child(1) { animation: flakePass 1.4s ease-in-out infinite; animation-delay: 0s; }
+  .flake:nth-child(2) { animation: flakePass 1.4s ease-in-out infinite; animation-delay: 0.45s; }
+  .flake:nth-child(3) { animation: flakePass 1.4s ease-in-out infinite; animation-delay: 0.9s; }
+
+  /* Estado concluído — floco fixo centralizado */
+  .shield-thinking.done .flake-container { display: none; }
+  .shield-thinking.done .flake-fixed { display: block !important; }
+  .flake-fixed {
+    display: none;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .flake-fixed svg { width: 8px; height: 8px; opacity: 0.7; }
 
 </style>
 </head>
@@ -901,58 +993,40 @@ function formatarEdital(edital) {
     </div>`;
 }
 
-// Detecta UF apenas se vier precedida de "em", "no", "na", "/" ou for sigla isolada com contexto
+// Detecta UF no comando — sigla, nome completo ou sigla isolada
 function detectarUF(comando) {
+  const texto = comando.toUpperCase().trim();
+
+  const nomes = {
+    'MATO GROSSO DO SUL':'MS','RIO GRANDE DO NORTE':'RN','RIO GRANDE DO SUL':'RS',
+    'RIO DE JANEIRO':'RJ','DISTRITO FEDERAL':'DF','ESPIRITO SANTO':'ES','ESPÍRITO SANTO':'ES',
+    'SANTA CATARINA':'SC','MINAS GERAIS':'MG','MATO GROSSO':'MT','SAO PAULO':'SP','SÃO PAULO':'SP',
+    'MARANHAO':'MA','MARANHÃO':'MA','PARAIBA':'PB','PARAÍBA':'PB','RONDONIA':'RO','RONDÔNIA':'RO',
+    'TOCANTINS':'TO','RORAIMA':'RR','AMAZONAS':'AM','SERGIPE':'SE','ALAGOAS':'AL','PIAUI':'PI','PIAUÍ':'PI',
+    'PARANA':'PR','PARANÁ':'PR','PERNAMBUCO':'PE','GOIAS':'GO','GOIÁS':'GO','CEARA':'CE','CEARÁ':'CE',
+    'BAHIA':'BA','AMAPA':'AP','AMAPÁ':'AP','ACRE':'AC','PARA':'PA','PARÁ':'PA'
+  };
+  for (const nome of Object.keys(nomes)) {
+    if (texto.includes(nome)) return nomes[nome];
+  }
+
   const ufs = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
-  // Procurar padrões "em SP", "no RJ", "na BA", "/MG", "estado de SP"
-  const texto = comando.toUpperCase();
   for (const uf of ufs) {
-    const padroes = [
-      new RegExp(`\\bEM ${uf}\\b`),
-      new RegExp(`\\bNO ${uf}\\b`),
-      new RegExp(`\\bNA ${uf}\\b`),
-      new RegExp(`\\bDE ${uf}\\b`),
-      new RegExp(`/${uf}\\b`),
-      new RegExp(`\\bESTADO ${uf}\\b`),
-      new RegExp(`\\bUF ${uf}\\b`),
-    ];
-    if (padroes.some(p => p.test(texto))) return uf;
+    if (new RegExp(`\\b(EM|NO|NA|DE|UF:?)\\s+${uf}\\b`).test(texto)) return uf;
+    if (new RegExp(`/${uf}\\b`).test(texto)) return uf;
+  }
+
+  const excluir = ['PAIS','PAÍS','ESTA','ESTE','ESSA','PARA','MAIS','DICA'];
+  for (const uf of ufs) {
+    if (new RegExp(`(^|\\s)${uf}($|\\s)`).test(texto)) {
+      let falso = false;
+      for (const ex of excluir) {
+        if (ex.includes(uf) && texto.includes(ex)) falso = true;
+      }
+      if (!falso) return uf;
+    }
   }
   return '';
-}
-
-async function executarBuscaEditais(comando) {
-  const ufDetectada = detectarUF(comando);
-
-  let dias = 30;
-  const c = comando.toLowerCase();
-  if (c.includes('hoje') || c.includes('24h') || c.includes('24 h')) dias = 2;
-  else if (c.includes('semana') || c.includes('7 dias')) dias = 7;
-  else if (c.includes('15 dias') || c.includes('quinze')) dias = 15;
-  else if (c.includes('60 dias') || c.includes('2 meses') || c.includes('dois meses')) dias = 60;
-  else if (c.includes('90 dias') || c.includes('3 meses') || c.includes('trimestre')) dias = 90;
-
-  addMessage('assistant', `<div style="color:#1a5f6e;font-weight:600">🔍 Buscando editais VRF no PNCP...<br><span style="font-weight:400;color:#555;font-size:12px">Período: últimos ${dias} dias${ufDetectada ? ' · UF: ' + ufDetectada : ' · Todo o Brasil'}</span></div>`, true);
-
-  try {
-    const editais = await buscarEditaisPNCP(dias, ufDetectada);
-
-    if (editais.length === 0) {
-      addMessage('assistant', formatAIResponse(`Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ''}. Tente ampliar o período (ex: "buscar editais VRF últimos 60 dias") ou remover o filtro de estado.`), true);
-      return true;
-    }
-
-    editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
-    const top = editais.slice(0, 15);
-    let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
-    for (const e of top) out += formatarEdital(e);
-    addMessage('assistant', out, true);
-    return true;
-
-  } catch(err) {
-    addMessage('assistant', `⚠️ Erro ao acessar o PNCP: ${err.message}. O portal pode estar temporariamente fora do ar. Tente novamente em instantes.`, false);
-    return true;
-  }
 }
 
 const BUSCA_TRIGGERS = ['buscar edital', 'busca edital', 'buscar editais', 'buscar licitaç', 'busca licitaç', 'procurar edital', 'editais de vrf', 'editais vrf', 'licitações de vrf', 'licitacoes de vrf', 'buscar vrf', 'busca vrf', 'mostrar edital', 'listar edital', 'pesquisar edital', 'pncp'];
@@ -1167,6 +1241,127 @@ newChat = function() {
     document.documentElement.classList.add('ios-standalone');
   }
 })();
+
+
+// ── THINKING STREAM ──
+const FLAKE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#2a8a9f" stroke-width="2" stroke-linecap="round">
+  <line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>
+  <line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/>
+  <circle cx="12" cy="12" r="2"/>
+</svg>`;
+const SHIELD_OUTLINE = `<svg class="shield-outline" viewBox="0 0 100 115" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M50 5 L90 22 L90 58 C90 80 72 100 50 108 C28 100 10 80 10 58 L10 22 Z"
+        fill="none" stroke="#1a5f6e" stroke-width="6" stroke-linejoin="round"/>
+</svg>`;
+
+function criarShieldThinking(done = false) {
+  return `
+    <div class="shield-thinking${done ? ' done' : ''}">
+      ${SHIELD_OUTLINE}
+      <div class="flake-container">
+        <div class="flake">${FLAKE_SVG}</div>
+        <div class="flake">${FLAKE_SVG}</div>
+        <div class="flake">${FLAKE_SVG}</div>
+      </div>
+      <div class="flake-fixed">${FLAKE_SVG}</div>
+    </div>`;
+}
+
+function criarStep(iconeSVG, texto, concluido = false) {
+  return `
+    <div class="thinking-step${concluido ? ' done' : ''}">
+      <div class="step-icon">${iconeSVG}</div>
+      <span class="step-text${concluido ? ' done' : ''}">${texto}</span>
+      ${concluido ? `<div class="step-icon"><svg width="13" height="13" fill="none" stroke="#1a9e6e" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>` : criarShieldThinking()}
+    </div>`;
+}
+
+async function mostrarThinkingStream(container, etapas) {
+  // Criar o bloco de thinking
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg ai';
+  const sender = document.createElement('div');
+  sender.className = 'msg-sender';
+  sender.textContent = 'Elite IA';
+  const streamDiv = document.createElement('div');
+  streamDiv.className = 'thinking-stream';
+  msgDiv.appendChild(sender);
+  msgDiv.appendChild(streamDiv);
+  container.appendChild(msgDiv);
+  container.scrollTop = container.scrollHeight;
+
+  const stepEls = [];
+
+  // Mostrar etapas uma a uma
+  for (let i = 0; i < etapas.length; i++) {
+    const { icone, texto, duracao } = etapas[i];
+    const stepHTML = criarStep(icone, texto, false);
+    streamDiv.insertAdjacentHTML('beforeend', stepHTML);
+    const stepEl = streamDiv.querySelectorAll('.thinking-step')[i];
+    stepEls.push(stepEl);
+    // Animar entrada
+    setTimeout(() => stepEl.classList.add('visible'), 50);
+    container.scrollTop = container.scrollHeight;
+    // Aguardar duração da etapa
+    await new Promise(r => setTimeout(r, duracao));
+    // Marcar como concluído
+    stepEl.classList.add('done');
+    const shieldEl = stepEl.querySelector('.shield-thinking');
+    if (shieldEl) shieldEl.classList.add('done');
+    stepEl.querySelector('.step-text').classList.add('done');
+    // Adicionar check
+    const checkDiv = document.createElement('div');
+    checkDiv.className = 'step-icon';
+    checkDiv.innerHTML = `<svg width="13" height="13" fill="none" stroke="#1a9e6e" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`;
+    stepEl.appendChild(checkDiv);
+  }
+
+  return streamDiv;
+}
+
+// Busca de editais com thinking stream
+async function executarBuscaEditais(comando) {
+  const ufDetectada = detectarUF(comando);
+  let dias = 30;
+  const c = comando.toLowerCase();
+  if (c.includes('hoje') || c.includes('24h')) dias = 2;
+  else if (c.includes('semana') || c.includes('7 dias')) dias = 7;
+  else if (c.includes('15 dias')) dias = 15;
+  else if (c.includes('60 dias') || c.includes('2 meses')) dias = 60;
+  else if (c.includes('90 dias') || c.includes('3 meses')) dias = 90;
+
+  const container = document.getElementById('chat-messages');
+
+  const etapas = [
+    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>`, texto: 'Analisando pedido...', duracao: 700 },
+    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,   texto: `Acessando portal PNCP${ufDetectada ? ' · UF: ' + ufDetectada : ' · Todo o Brasil'}`, duracao: 900 },
+    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`, texto: `Filtrando editais de VRF — últimos ${dias} dias`, duracao: 800 },
+    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,    texto: 'Processando modalidades de contratação...', duracao: 600 },
+  ];
+
+  await mostrarThinkingStream(container, etapas);
+
+  // Agora executar a busca real
+  try {
+    const editais = await buscarEditaisPNCP(dias, ufDetectada);
+
+    if (editais.length === 0) {
+      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ''}. Tente ampliar o período.`);
+      return true;
+    }
+
+    editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
+    const top = editais.slice(0, 15);
+    let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
+    for (const e of top) out += formatarEdital(e);
+    addMessage('assistant', out, true);
+
+  } catch(err) {
+    addMessage('assistant', '⚠️ Erro ao acessar o PNCP. Tente novamente em instantes.');
+  }
+
+  return true;
+};
 
 </script>
 </body>
