@@ -572,6 +572,11 @@ function doLogin() {
     const initials = user.substring(0,2).toUpperCase();
     document.getElementById('sidebar-avatar').textContent = initials;
     document.getElementById('sidebar-username').textContent = user.charAt(0).toUpperCase() + user.slice(1);
+
+  // Inicializar histórico ao fazer login
+  startNewConversation();
+  renderRecentsList();
+
   } else {
     document.getElementById('login-error').style.display = 'block';
   }
@@ -982,6 +987,176 @@ const inputObserver = new MutationObserver(() => {
   });
 });
 inputObserver.observe(document.body, { childList: true, subtree: true });
+
+
+// ─── HISTÓRICO DE CONVERSAS (localStorage) ───
+const STORAGE_KEY = 'eliteia_conversations';
+const MAX_CONVERSATIONS = 50;
+
+let currentConversationId = null;
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+}
+
+function loadAllConversations() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch(e) { return []; }
+}
+
+function saveAllConversations(convs) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(convs.slice(0, MAX_CONVERSATIONS)));
+  } catch(e) { console.error('Erro ao salvar:', e); }
+}
+
+function getCurrentConversation() {
+  const all = loadAllConversations();
+  return all.find(c => c.id === currentConversationId) || null;
+}
+
+function saveCurrentConversation(title) {
+  if (!currentConversationId) return;
+  const all = loadAllConversations();
+  const idx = all.findIndex(c => c.id === currentConversationId);
+  const conv = {
+    id: currentConversationId,
+    title: title || 'Conversa sem título',
+    messages: conversationHistory,
+    renderedHTML: getRenderedMessages(),
+    updatedAt: Date.now()
+  };
+  if (idx >= 0) all[idx] = conv;
+  else all.unshift(conv);
+  // Ordenar por mais recente
+  all.sort((a, b) => b.updatedAt - a.updatedAt);
+  saveAllConversations(all);
+  renderRecentsList();
+}
+
+function getRenderedMessages() {
+  const container = document.getElementById('chat-messages');
+  const msgs = container.querySelectorAll('.msg');
+  const result = [];
+  msgs.forEach(m => {
+    const role = m.classList.contains('user') ? 'user' : 'ai';
+    const bubble = m.querySelector('.bubble');
+    result.push({ role, html: bubble ? bubble.innerHTML : '' });
+  });
+  return result;
+}
+
+function generateTitle(text) {
+  // Pega as primeiras palavras da primeira mensagem do usuário
+  return text.replace(/[^a-zA-ZÀ-ú0-9 ]/g, '').trim().substring(0, 40) || 'Nova Conversa';
+}
+
+function startNewConversation() {
+  currentConversationId = generateId();
+  conversationHistory = [];
+  resetMessages();
+}
+
+function openConversation(id) {
+  const all = loadAllConversations();
+  const conv = all.find(c => c.id === id);
+  if (!conv) return;
+
+  currentConversationId = id;
+  conversationHistory = conv.messages || [];
+
+  // Restaurar mensagens renderizadas
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = '';
+
+  if (conv.renderedHTML && conv.renderedHTML.length > 0) {
+    conv.renderedHTML.forEach(m => {
+      const div = document.createElement('div');
+      div.className = `msg ${m.role === 'user' ? 'user' : 'ai'}`;
+      const sender = document.createElement('div');
+      sender.className = 'msg-sender';
+      sender.textContent = m.role === 'user' ? 'Você' : 'Elite IA';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = m.html;
+      div.appendChild(sender);
+      div.appendChild(bubble);
+      container.appendChild(div);
+    });
+    container.scrollTop = container.scrollHeight;
+  } else {
+    resetMessages();
+  }
+
+  closeSidebar();
+  renderRecentsList();
+}
+
+function deleteConversation(id, e) {
+  e.stopPropagation();
+  const all = loadAllConversations().filter(c => c.id !== id);
+  saveAllConversations(all);
+  if (currentConversationId === id) startNewConversation();
+  renderRecentsList();
+}
+
+function renderRecentsList() {
+  const container = document.getElementById('sidebar-recents');
+  const all = loadAllConversations();
+
+  if (all.length === 0) {
+    container.innerHTML = '<div style="padding:8px 20px;font-size:12px;color:rgba(255,255,255,0.3)">Nenhuma conversa salva</div>';
+    return;
+  }
+
+  container.innerHTML = all.map(conv => {
+    const isActive = conv.id === currentConversationId;
+    const date = new Date(conv.updatedAt);
+    const dateStr = date.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+    return `
+      <div onclick="openConversation('${conv.id}')" style="
+        display:flex;align-items:center;justify-content:space-between;
+        padding:9px 20px;cursor:pointer;transition:background 0.15s;
+        background:${isActive ? 'rgba(58,181,204,0.1)' : 'transparent'};
+      " onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
+         onmouseout="this.style.background='${isActive ? 'rgba(58,181,204,0.1)' : 'transparent'}'">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;color:${isActive ? 'var(--teal-glow)' : 'rgba(255,255,255,0.75)'};
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${conv.title}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px">${dateStr}</div>
+        </div>
+        <button onclick="deleteConversation('${conv.id}', event)" style="
+          background:none;border:none;color:rgba(255,255,255,0.25);
+          cursor:pointer;padding:4px;margin-left:8px;flex-shrink:0;
+          font-size:14px;line-height:1;transition:color 0.2s;
+        " onmouseover="this.style.color='#ff7b7b'" onmouseout="this.style.color='rgba(255,255,255,0.25)'">×</button>
+      </div>`;
+  }).join('');
+}
+
+// Interceptar addMessage para salvar automaticamente
+const _origAddMessage = addMessage;
+let _firstUserMessage = '';
+addMessage = function(role, content, isHTML) {
+  _origAddMessage(role, content, isHTML);
+  // Capturar título da primeira mensagem do usuário
+  if (role === 'user' && !_firstUserMessage && typeof content === 'string') {
+    _firstUserMessage = content;
+  }
+  // Salvar após cada mensagem da IA (conversa completa)
+  if (role === 'assistant') {
+    const title = generateTitle(_firstUserMessage || 'Conversa');
+    saveCurrentConversation(title);
+  }
+};
+
+// Sobrescrever newChat para usar o sistema de histórico
+const _origNewChat = newChat;
+newChat = function() {
+  _firstUserMessage = '';
+  startNewConversation();
+};
 
 </script>
 </body>
