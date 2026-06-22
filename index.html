@@ -384,30 +384,21 @@
 
 
 
-  /* ── STANDALONE iOS: layout correto com safe areas ── */
-  @supports (padding-top: env(safe-area-inset-top)) {
-    @media (display-mode: standalone) {
-      html {
-        /* Altura real disponível excluindo notch e barra home */
-        height: -webkit-fill-available;
-      }
-      body {
-        height: -webkit-fill-available;
-      }
-      #chat-screen {
-        height: 100%;
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-      }
-      #login-screen {
-        padding-top: calc(env(safe-area-inset-top) + 20px);
-        padding-bottom: env(safe-area-inset-bottom);
-        min-height: -webkit-fill-available;
-      }
-      .chat-input-area {
-        padding-bottom: calc(12px + env(safe-area-inset-bottom));
-      }
-    }
+
+
+  /* Standalone iOS — empurra header abaixo do notch e input acima da barra home */
+  .ios-standalone .chat-header {
+    padding-top: calc(14px + env(safe-area-inset-top, 44px));
+  }
+  .ios-standalone .chat-input-area {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 34px));
+  }
+  .ios-standalone #login-screen {
+    padding-top: calc(24px + env(safe-area-inset-top, 44px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 34px));
+  }
+  .ios-standalone .sidebar-header {
+    padding-top: calc(20px + env(safe-area-inset-top, 44px));
   }
 
 </style>
@@ -1164,6 +1155,18 @@ newChat = function() {
 
 
 
+
+
+// ─── AJUSTE STANDALONE iOS (safe areas) ───
+(function() {
+  function isStandalone() {
+    return window.navigator.standalone === true ||
+           window.matchMedia('(display-mode: standalone)').matches;
+  }
+  if (isStandalone()) {
+    document.documentElement.classList.add('ios-standalone');
+  }
+})();
 
 </script>
 </body>
