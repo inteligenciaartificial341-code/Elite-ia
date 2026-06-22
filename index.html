@@ -374,15 +374,18 @@
   #chat-screen.desktop-mode .msg { max-width: 70%; }
 
 
-  /* Fix iOS PWA inputs */
+  /* iOS inputs */
   input, textarea {
-    -webkit-user-select: text !important;
-    user-select: text !important;
-    font-size: 16px !important; /* evita zoom automático do iOS */
-    touch-action: manipulation;
+    -webkit-user-select: text;
+    user-select: text;
+    font-size: 16px;
   }
-  * { -webkit-tap-highlight-color: transparent; }
 
+
+  @media (display-mode: standalone) {
+    body { padding-top: env(safe-area-inset-top); }
+    #login-screen { padding-top: calc(24px + env(safe-area-inset-top)); }
+  }
 </style>
 </head>
 <body>
@@ -396,9 +399,9 @@
   </div>
   <div class="login-card">
     <label>Usuário</label>
-    <input type="text" id="login-user" placeholder="seu usuário" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" readonly/>
+    <input type="text" id="login-user" placeholder="seu usuário" autocorrect="off" autocapitalize="none" spellcheck="false"/>
     <label>Senha</label>
-    <input type="password" id="login-pass" placeholder="••••••••" autocomplete="off" autocorrect="off" autocapitalize="none" readonly/>
+    <input type="password" id="login-pass" placeholder="••••••••" autocorrect="off" autocapitalize="none"/>
     <button class="btn-login" onclick="doLogin()">Entrar</button>
     <div class="login-error" id="login-error">Usuário ou senha incorretos.</div>
   </div>
@@ -538,7 +541,7 @@
       <input type="file" id="file-input" accept=".pdf" style="display:none" onchange="handleFile(this)"/>
 
       <textarea id="msg-input" rows="1" placeholder="Escreva sua mensagem..."
-        onkeydown="handleKey(event)" oninput="autoResize(this)" readonly></textarea>
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
 
       <!-- Microfone slim SVG -->
       <button class="btn-mic" title="Voz" onclick="startVoice()">
@@ -1137,41 +1140,6 @@ newChat = function() {
 
 
 
-// ─── FIX DEFINITIVO TECLADO iOS 18 PWA ───
-// iOS 18 não mostra o teclado em PWA standalone com focus programático.
-// Truque: input fica readonly; ao receber toque REAL do usuário, remove
-// readonly e foca dentro do mesmo gesto, forçando o teclado a aparecer.
-function enableKeyboardFix(el) {
-  if (el.dataset.kbReady) return;
-  el.dataset.kbReady = '1';
-
-  const ativar = function() {
-    if (el.hasAttribute('readonly')) {
-      el.removeAttribute('readonly');
-      // foca dentro do mesmo gesto de toque
-      el.focus();
-    }
-  };
-
-  // pointerup cobre toque e clique de forma confiável no iOS
-  el.addEventListener('pointerup', ativar);
-  el.addEventListener('click', ativar);
-
-  // Ao perder o foco, volta a ser readonly para o truque funcionar de novo
-  el.addEventListener('blur', function() {
-    el.setAttribute('readonly', '');
-  });
-}
-
-function applyKeyboardFixAll() {
-  document.querySelectorAll('input, textarea').forEach(enableKeyboardFix);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  applyKeyboardFixAll();
-  new MutationObserver(applyKeyboardFixAll)
-    .observe(document.body, { childList: true, subtree: true });
-});
 
 </script>
 </body>
