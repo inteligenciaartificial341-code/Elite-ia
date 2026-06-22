@@ -402,96 +402,133 @@
   }
 
 
-  /* ── THINKING STREAM ── */
-  .thinking-stream {
-    background: var(--card-bg);
-    border-radius: 16px 16px 16px 4px;
-    padding: 14px 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    min-width: 240px;
-    max-width: 88%;
-  }
 
-  .thinking-step {
+
+
+
+  /* ── ELITE IA THINKING STREAM ── */
+
+  .ts-wrap {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 0;
-    font-size: 13px;
-    color: #2a4a50;
-    border-bottom: 1px solid rgba(26,95,110,0.08);
-    opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.4s ease, transform 0.4s ease;
-  }
-  .thinking-step:last-child { border-bottom: none; }
-  .thinking-step.visible { opacity: 1; transform: translateY(0); }
-  .thinking-step.done .step-icon-wrap { opacity: 0.5; }
-
-  /* Ícone SVG slim da etapa (lupa, engrenagem, etc) */
-  .step-icon {
-    flex-shrink: 0;
-    color: #1a5f6e;
-    opacity: 0.8;
+    align-items: flex-start;
+    gap: 8px;
+    align-self: flex-start;
+    max-width: 85%;
   }
 
-  .step-text { flex: 1; line-height: 1.4; }
-  .step-text.done { color: #888; }
-
-  /* Shield com flocos animados */
-  .shield-thinking {
+  /* Escudo à esquerda — fora da caixa, igual asterisco do Claude */
+  .ts-shield {
     flex-shrink: 0;
+    width: 30px;
+    height: 36px;
     position: relative;
-    width: 28px;
-    height: 32px;
+    margin-top: 2px;
   }
-  .shield-thinking svg.shield-outline {
+  .ts-shield svg.sh-bg {
     position: absolute;
-    top: 0; left: 0;
-    width: 28px; height: 32px;
+    inset: 0;
+    width: 30px;
+    height: 36px;
   }
-  /* Os 3 flocos que passam dentro do escudo */
-  .flake-container {
+  /* Área de clip dos flocos */
+  .ts-scene {
     position: absolute;
-    top: 50%; left: 0;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 14px;
+    top: 7px; left: 4px;
+    width: 22px; height: 22px;
     overflow: hidden;
   }
-  .flake {
+
+  /* Cada floco — trajetória ondulada diferente */
+  .ts-fk {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0; /* usar SVG inline */
+    width: 6px; height: 6px;
+    opacity: 0;
   }
-  .flake svg {
-    width: 7px;
-    height: 7px;
-    opacity: 0.85;
+  .ts-fk svg { width: 100%; height: 100%; }
+
+  /* Floco 0: passa no topo, ondula para baixo no meio */
+  @keyframes wave0 {
+    0%   { left: -7px; top: 2px;  opacity: 0;   }
+    12%  { opacity: 1; }
+    30%  { top: 9px; }
+    50%  { top: 3px; }
+    70%  { top: 10px; }
+    88%  { opacity: 1; }
+    100% { left: 24px; top: 4px;  opacity: 0;   }
+  }
+  /* Floco 1: passa no meio, ondula diferente */
+  @keyframes wave1 {
+    0%   { left: -7px; top: 9px;  opacity: 0;   }
+    12%  { opacity: 1; }
+    30%  { top: 2px; }
+    50%  { top: 11px; }
+    70%  { top: 4px; }
+    88%  { opacity: 1; }
+    100% { left: 24px; top: 8px;  opacity: 0;   }
+  }
+  /* Floco 2: passa embaixo, ondula para cima */
+  @keyframes wave2 {
+    0%   { left: -7px; top: 16px; opacity: 0;   }
+    12%  { opacity: 1; }
+    30%  { top: 9px; }
+    50%  { top: 16px; }
+    70%  { top: 8px; }
+    88%  { opacity: 1; }
+    100% { left: 24px; top: 15px; opacity: 0;   }
   }
 
-  /* Animação: entra pela esquerda, sai pela direita */
-  @keyframes flakePass {
-    0%   { left: -8px; opacity: 0; }
-    15%  { opacity: 1; }
-    85%  { opacity: 1; }
-    100% { left: 30px; opacity: 0; }
-  }
-  .flake:nth-child(1) { animation: flakePass 1.4s ease-in-out infinite; animation-delay: 0s; }
-  .flake:nth-child(2) { animation: flakePass 1.4s ease-in-out infinite; animation-delay: 0.45s; }
-  .flake:nth-child(3) { animation: flakePass 1.4s ease-in-out infinite; animation-delay: 0.9s; }
+  .ts-fk:nth-child(1) { animation: wave0 2.6s ease-in-out infinite 0s; }
+  .ts-fk:nth-child(2) { animation: wave1 2.6s ease-in-out infinite 0.85s; }
+  .ts-fk:nth-child(3) { animation: wave2 2.6s ease-in-out infinite 1.7s; }
 
-  /* Estado concluído — floco fixo centralizado */
-  .shield-thinking.done .flake-container { display: none; }
-  .shield-thinking.done .flake-fixed { display: block !important; }
-  .flake-fixed {
+  /* Rastros de neve — pontinhos teal que somem */
+  .ts-trail {
+    position: absolute;
+    width: 2.5px; height: 2.5px;
+    border-radius: 50%;
+    background: #3ab5cc;
+    opacity: 0;
+  }
+  @keyframes tr0 { 0%{left:4px;top:4px;opacity:.6} 100%{left:4px;top:4px;opacity:0} }
+  @keyframes tr1 { 0%{left:10px;top:12px;opacity:.5} 100%{left:10px;top:12px;opacity:0} }
+  @keyframes tr2 { 0%{left:16px;top:6px;opacity:.6} 100%{left:16px;top:6px;opacity:0} }
+  @keyframes tr3 { 0%{left:7px;top:16px;opacity:.4} 100%{left:7px;top:16px;opacity:0} }
+  @keyframes tr4 { 0%{left:19px;top:14px;opacity:.5} 100%{left:19px;top:14px;opacity:0} }
+  .ts-trail:nth-child(1) { animation: tr0 2.6s ease-out infinite 0.4s; }
+  .ts-trail:nth-child(2) { animation: tr1 2.6s ease-out infinite 1.2s; }
+  .ts-trail:nth-child(3) { animation: tr2 2.6s ease-out infinite 0.9s; }
+  .ts-trail:nth-child(4) { animation: tr3 2.6s ease-out infinite 1.8s; }
+  .ts-trail:nth-child(5) { animation: tr4 2.6s ease-out infinite 0.3s; }
+
+  /* Floco fixo quando termina */
+  .ts-fk-fixed {
     display: none;
     position: absolute;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
+    width: 10px; height: 10px;
   }
-  .flake-fixed svg { width: 8px; height: 8px; opacity: 0.7; }
+  .ts-fk-fixed svg { width: 100%; height: 100%; opacity: 0.8; }
+  .ts-shield.done .ts-scene  { display: none; }
+  .ts-shield.done .ts-fk-fixed { display: block; }
+
+  /* Coluna direita: label + texto único que muda */
+  .ts-col { flex: 1; min-width: 0; }
+  .ts-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--white-80);
+    margin-bottom: 3px;
+    letter-spacing: 0.3px;
+  }
+  .ts-msg {
+    font-size: 13px;
+    font-style: italic;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.4;
+    transition: opacity 0.3s ease;
+  }
+  .ts-msg.fade { opacity: 0; }
 
 </style>
 </head>
@@ -1243,83 +1280,69 @@ newChat = function() {
 })();
 
 
-// ── THINKING STREAM ──
-const FLAKE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#2a8a9f" stroke-width="2" stroke-linecap="round">
-  <line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>
-  <line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/>
-  <circle cx="12" cy="12" r="2"/>
-</svg>`;
-const SHIELD_OUTLINE = `<svg class="shield-outline" viewBox="0 0 100 115" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M50 5 L90 22 L90 58 C90 80 72 100 50 108 C28 100 10 80 10 58 L10 22 Z"
-        fill="none" stroke="#1a5f6e" stroke-width="6" stroke-linejoin="round"/>
-</svg>`;
+;
 
-function criarShieldThinking(done = false) {
-  return `
-    <div class="shield-thinking${done ? ' done' : ''}">
-      ${SHIELD_OUTLINE}
-      <div class="flake-container">
-        <div class="flake">${FLAKE_SVG}</div>
-        <div class="flake">${FLAKE_SVG}</div>
-        <div class="flake">${FLAKE_SVG}</div>
-      </div>
-      <div class="flake-fixed">${FLAKE_SVG}</div>
-    </div>`;
-}
 
-function criarStep(iconeSVG, texto, concluido = false) {
-  return `
-    <div class="thinking-step${concluido ? ' done' : ''}">
-      <div class="step-icon">${iconeSVG}</div>
-      <span class="step-text${concluido ? ' done' : ''}">${texto}</span>
-      ${concluido ? `<div class="step-icon"><svg width="13" height="13" fill="none" stroke="#1a9e6e" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>` : criarShieldThinking()}
-    </div>`;
+
+
+
+
+// ── ELITE IA THINKING STREAM ──
+const _TS_FLAKE = `<svg viewBox="0 0 24 24" fill="none" stroke="#3ab5cc" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/><circle cx="12" cy="12" r="2.5" fill="#3ab5cc"/></svg>`;
+const _TS_SHIELD = `<svg class="sh-bg" viewBox="0 0 100 115" fill="none"><path d="M50 5 L90 22 L90 58 C90 80 72 100 50 108 C28 100 10 80 10 58 L10 22 Z" stroke="#3ab5cc" stroke-width="7" stroke-linejoin="round"/></svg>`;
+
+function _buildTsShield() {
+  return `<div class="ts-shield">
+    ${_TS_SHIELD}
+    <div class="ts-scene">
+      <div class="ts-trail"></div><div class="ts-trail"></div>
+      <div class="ts-trail"></div><div class="ts-trail"></div>
+      <div class="ts-trail"></div>
+      <div class="ts-fk">${_TS_FLAKE}</div>
+      <div class="ts-fk">${_TS_FLAKE}</div>
+      <div class="ts-fk">${_TS_FLAKE}</div>
+    </div>
+    <div class="ts-fk-fixed">${_TS_FLAKE}</div>
+  </div>`;
 }
 
 async function mostrarThinkingStream(container, etapas) {
-  // Criar o bloco de thinking
-  const msgDiv = document.createElement('div');
-  msgDiv.className = 'msg ai';
-  const sender = document.createElement('div');
-  sender.className = 'msg-sender';
-  sender.textContent = 'Elite IA';
-  const streamDiv = document.createElement('div');
-  streamDiv.className = 'thinking-stream';
-  msgDiv.appendChild(sender);
-  msgDiv.appendChild(streamDiv);
-  container.appendChild(msgDiv);
+  const wrap = document.createElement('div');
+  wrap.className = 'ts-wrap';
+
+  const shieldDiv = document.createElement('div');
+  shieldDiv.innerHTML = _buildTsShield();
+  const shieldEl = shieldDiv.firstElementChild;
+  wrap.appendChild(shieldEl);
+
+  const col = document.createElement('div');
+  col.className = 'ts-col';
+  col.innerHTML = '<div class="ts-label">Elite IA</div><div class="ts-msg"></div>';
+  wrap.appendChild(col);
+
+  container.appendChild(wrap);
   container.scrollTop = container.scrollHeight;
 
-  const stepEls = [];
+  const msgEl = col.querySelector('.ts-msg');
 
-  // Mostrar etapas uma a uma
   for (let i = 0; i < etapas.length; i++) {
-    const { icone, texto, duracao } = etapas[i];
-    const stepHTML = criarStep(icone, texto, false);
-    streamDiv.insertAdjacentHTML('beforeend', stepHTML);
-    const stepEl = streamDiv.querySelectorAll('.thinking-step')[i];
-    stepEls.push(stepEl);
-    // Animar entrada
-    setTimeout(() => stepEl.classList.add('visible'), 50);
+    const { texto, duracao } = etapas[i];
+    if (i > 0) {
+      msgEl.classList.add('fade');
+      await new Promise(r => setTimeout(r, 280));
+    }
+    msgEl.textContent = texto;
+    msgEl.classList.remove('fade');
     container.scrollTop = container.scrollHeight;
-    // Aguardar duração da etapa
     await new Promise(r => setTimeout(r, duracao));
-    // Marcar como concluído
-    stepEl.classList.add('done');
-    const shieldEl = stepEl.querySelector('.shield-thinking');
-    if (shieldEl) shieldEl.classList.add('done');
-    stepEl.querySelector('.step-text').classList.add('done');
-    // Adicionar check
-    const checkDiv = document.createElement('div');
-    checkDiv.className = 'step-icon';
-    checkDiv.innerHTML = `<svg width="13" height="13" fill="none" stroke="#1a9e6e" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`;
-    stepEl.appendChild(checkDiv);
   }
 
-  return streamDiv;
+  shieldEl.classList.add('done');
+  msgEl.classList.add('fade');
+  await new Promise(r => setTimeout(r, 300));
+  wrap.remove();
 }
 
-// Busca de editais com thinking stream
 async function executarBuscaEditais(comando) {
   const ufDetectada = detectarUF(comando);
   let dias = 30;
@@ -1333,35 +1356,30 @@ async function executarBuscaEditais(comando) {
   const container = document.getElementById('chat-messages');
 
   const etapas = [
-    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>`, texto: 'Analisando pedido...', duracao: 700 },
-    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,   texto: `Acessando portal PNCP${ufDetectada ? ' · UF: ' + ufDetectada : ' · Todo o Brasil'}`, duracao: 900 },
-    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`, texto: `Filtrando editais de VRF — últimos ${dias} dias`, duracao: 800 },
-    { icone: `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,    texto: 'Processando modalidades de contratação...', duracao: 600 },
+    { texto: 'Analisando pedido...', duracao: 800 },
+    { texto: `Acessando portal PNCP${ufDetectada ? ' · ' + ufDetectada : ' · Todo o Brasil'}`, duracao: 1000 },
+    { texto: `Filtrando editais de VRF — últimos ${dias} dias`, duracao: 900 },
+    { texto: 'Processando modalidades de contratação...', duracao: 800 },
   ];
 
   await mostrarThinkingStream(container, etapas);
 
-  // Agora executar a busca real
   try {
     const editais = await buscarEditaisPNCP(dias, ufDetectada);
-
     if (editais.length === 0) {
       addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ''}. Tente ampliar o período.`);
       return true;
     }
-
     editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
     const top = editais.slice(0, 15);
     let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
     for (const e of top) out += formatarEdital(e);
     addMessage('assistant', out, true);
-
   } catch(err) {
-    addMessage('assistant', '⚠️ Erro ao acessar o PNCP. Tente novamente em instantes.');
+    addMessage('assistant', '⚠️ Erro ao acessar o PNCP. Tente novamente.');
   }
-
   return true;
-};
+}
 
 </script>
 </body>
