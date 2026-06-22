@@ -688,7 +688,7 @@
         onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
 
       <!-- Microfone slim SVG -->
-      <button class="btn-mic" title="Voz" onclick="startVoice()">
+      <button class="btn-mic" title="Voz" onclick="window._startVoiceRecording ? window._startVoiceRecording() : startVoice()">
         <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
           <rect x="9" y="2" width="6" height="12" rx="3"/>
           <path d="M5 10a7 7 0 0014 0"/>
@@ -841,13 +841,17 @@ async function sendMessage() {
   input.value = ''; input.style.height = 'auto';
   addMessage('user', text);
 
-  // Interceptar busca de editais — vai direto na API PNCP
-  if (isBuscaComando(text)) {
-    await executarBuscaEditais(text);
+  // Usar IA para interpretar a intenção — sem palavras-chave fixas
+  const intencao = await interpretarIntencao(text);
+
+  if (intencao.ehBusca) {
+    if (intencao.uf) _ultimaUF = intencao.uf;
+    if (intencao.dias) _ultimosDias = intencao.dias;
+    _ultimoContexto = 'busca';
+    await executarBuscaEditaisInteligente(intencao);
     return;
   }
 
-  // Resetar contexto de busca quando vai para IA normal
   _ultimoContexto = null;
   conversationHistory.push({ role: 'user', content: text });
   addTyping();
@@ -1457,6 +1461,220 @@ async function executarBuscaEditais(comando) {
   }
   return true;
 }
+
+
+// ── INTERPRETAÇÃO INTELIGENTE DE INTENÇÃO VIA IA ──
+// A IA lê a mensagem + contexto e decide se é busca de editais
+async function interpretarIntencao(texto) {
+  const contexto = _ultimoContexto === 'busca'
+    ? `\n\nContexto: o usuário estava buscando editais de VRF${_ultimaUF ? ' em ' + _ultimaUF : ''}${_ultimosDias ? ' nos últimos ' + _ultimosDias + ' dias' : ''}.`
+    : '';
+
+  const prompt = `Analise a mensagem do usuário e responda APENAS com JSON válido, sem texto extra.
+
+Mensagem: "${texto}"${contexto}
+
+Determine:
+1. É uma solicitação de busca/pesquisa de editais ou licitações de VRF/ar condicionado/climatização?
+2. Qual UF/estado foi mencionado? (sigla de 2 letras ou vazio)
+3. Quantos dias para trás buscar? (número inteiro, padrão 30 se não especificado)
+
+Responda SOMENTE com este JSON:
+{"ehBusca": true/false, "uf": "GO" ou "", "dias": 30}
+
+Exemplos:
+"buscar editais VRF em Goiás" → {"ehBusca": true, "uf": "GO", "dias": 30}
+"agora somente em Goiás" → {"ehBusca": true, "uf": "GO", "dias": 30}
+"nos últimos 60 dias" → {"ehBusca": true, "uf": "", "dias": 60}
+"o que é VRF?" → {"ehBusca": false, "uf": "", "dias": 0}
+"quais documentos preciso?" → {"ehBusca": false, "uf": "", "dias": 0}
+"me manda as licitações de SP" → {"ehBusca": true, "uf": "SP", "dias": 30}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 100,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const raw = data.content?.[0]?.text || '{"ehBusca":false,"uf":"","dias":30}';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    // Herdar contexto anterior se não especificado
+    if (parsed.ehBusca) {
+      if (!parsed.uf && _ultimoContexto === 'busca' && _ultimaUF) parsed.uf = _ultimaUF;
+      if (!parsed.dias || parsed.dias === 30) {
+        if (_ultimoContexto === 'busca' && _ultimosDias && _ultimosDias !== 30) {
+          parsed.dias = _ultimosDias;
+        }
+      }
+      // Se o texto menciona explicitamente um número de dias, usa esse
+      const diasMatch = texto.match(/(\d+)\s*dias?/i);
+      if (diasMatch) parsed.dias = parseInt(diasMatch[1]);
+    }
+
+    return parsed;
+  } catch(e) {
+    // Fallback: usar lógica antiga se a IA falhar
+    return {
+      ehBusca: isBuscaComando(texto),
+      uf: detectarUF(texto) || (_ultimoContexto === 'busca' ? _ultimaUF : ''),
+      dias: _ultimosDias || 30
+    };
+  }
+}
+
+// ── BUSCA COM INTENÇÃO INTERPRETADA PELA IA ──
+async function executarBuscaEditaisInteligente(intencao) {
+  const { uf: ufDetectada, dias } = intencao;
+  const container = document.getElementById('chat-messages');
+
+  // Thinking stream — fica ativo até o resultado chegar de verdade
+  const wrap = document.createElement('div');
+  wrap.className = 'ts-wrap';
+  const shieldDiv = document.createElement('div');
+  shieldDiv.innerHTML = _buildTsShield();
+  const shieldEl = shieldDiv.firstElementChild;
+  wrap.appendChild(shieldEl);
+  const col = document.createElement('div');
+  col.className = 'ts-col';
+  col.innerHTML = '<div class="ts-label">Elite IA</div><div class="ts-msg"></div>';
+  wrap.appendChild(col);
+  container.appendChild(wrap);
+  container.scrollTop = container.scrollHeight;
+  const msgEl = col.querySelector('.ts-msg');
+
+  // Função para atualizar texto com fade
+  async function setMsg(texto) {
+    msgEl.classList.add('fade');
+    await new Promise(r => setTimeout(r, 250));
+    msgEl.textContent = texto;
+    msgEl.classList.remove('fade');
+    container.scrollTop = container.scrollHeight;
+  }
+
+  await setMsg('Analisando pedido...');
+  await new Promise(r => setTimeout(r, 700));
+
+  await setMsg(`Acessando portal PNCP${ufDetectada ? ' · ' + ufDetectada : ' · Todo o Brasil'}`);
+  await new Promise(r => setTimeout(r, 800));
+
+  await setMsg(`Filtrando editais de VRF — últimos ${dias} dias`);
+  // NÃO esperar tempo fixo aqui — a busca começa agora e o stream fica ativo
+
+  try {
+    // Iniciar busca real enquanto stream está ativo
+    const [editais] = await Promise.all([
+      buscarEditaisPNCP(dias, ufDetectada),
+      new Promise(r => setTimeout(r, 600)) // mínimo de tempo nesta etapa
+    ]);
+
+    await setMsg('Processando e organizando resultados...');
+    await new Promise(r => setTimeout(r, 500));
+
+    // Agora sim encerrar o stream
+    shieldEl.classList.add('done');
+    msgEl.classList.add('fade');
+    await new Promise(r => setTimeout(r, 300));
+    wrap.remove();
+
+    if (editais.length === 0) {
+      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ' em todo o Brasil'}. Tente ampliar o período ou remover o filtro de estado.`);
+      return;
+    }
+
+    editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
+    const top = editais.slice(0, 15);
+    let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
+    for (const e of top) out += formatarEdital(e);
+    addMessage('assistant', out, true);
+
+  } catch(err) {
+    shieldEl.classList.add('done');
+    msgEl.classList.add('fade');
+    await new Promise(r => setTimeout(r, 200));
+    wrap.remove();
+    addMessage('assistant', '⚠️ Erro ao acessar o PNCP. Verifique sua conexão e tente novamente.');
+  }
+}
+
+// ── MICROFONE iOS/Safari ──
+// Substituir a função existente por versão compatível com Safari
+(function() {
+  // No iOS Safari, a Speech Recognition precisa ser iniciada
+  // dentro de um evento de toque direto do usuário
+  const micBtnEl = document.querySelector ? null : null; // será buscado ao clicar
+  window._startVoiceRecording = function() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert('Reconhecimento de voz não suportado. Use Safari no iOS 15+ ou Chrome.');
+      return;
+    }
+
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+
+    const micBtn = document.querySelector('.btn-mic');
+
+    rec.onstart = () => {
+      if (micBtn) {
+        micBtn.style.color = '#ff6b6b';
+        micBtn.style.transform = 'scale(1.2)';
+      }
+    };
+
+    rec.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      const inp = document.getElementById('msg-input');
+      if (inp) {
+        inp.value = transcript;
+        autoResize(inp);
+        inp.focus();
+      }
+      if (micBtn) {
+        micBtn.style.color = '';
+        micBtn.style.transform = '';
+      }
+      setTimeout(() => {
+        const current = document.getElementById('msg-input');
+        if (current && current.value.trim()) sendMessage();
+      }, 500);
+    };
+
+    rec.onerror = (event) => {
+      if (micBtn) {
+        micBtn.style.color = '';
+        micBtn.style.transform = '';
+      }
+      if (event.error === 'not-allowed') {
+        alert('Acesso ao microfone negado. Permita nas configurações do Safari.');
+      } else if (event.error !== 'no-speech') {
+        alert('Erro no microfone: ' + event.error);
+      }
+    };
+
+    rec.onend = () => {
+      if (micBtn) {
+        micBtn.style.color = '';
+        micBtn.style.transform = '';
+      }
+    };
+
+    try {
+      rec.start();
+    } catch(e) {
+      alert('Não foi possível iniciar o microfone: ' + e.message);
+    }
+  };
+})();
 
 </script>
 </body>
