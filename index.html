@@ -370,6 +370,16 @@
   }
   #chat-screen.desktop-mode .msg { max-width: 70%; }
 
+
+  /* Fix iOS PWA inputs */
+  input, textarea {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    font-size: 16px !important; /* evita zoom automático do iOS */
+    touch-action: manipulation;
+  }
+  * { -webkit-tap-highlight-color: transparent; }
+
 </style>
 </head>
 <body>
@@ -383,9 +393,9 @@
   </div>
   <div class="login-card">
     <label>Usuário</label>
-    <input type="text" id="login-user" placeholder="seu usuário" autocomplete="username"/>
+    <input type="text" id="login-user" placeholder="seu usuário" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false"/>
     <label>Senha</label>
-    <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
+    <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" autocorrect="off" autocapitalize="none"/>
     <button class="btn-login" onclick="doLogin()">Entrar</button>
     <div class="login-error" id="login-error">Usuário ou senha incorretos.</div>
   </div>
@@ -941,6 +951,37 @@ function toggleView() {
     iconD.style.display = 'none';
   }
 }
+
+
+// ─── FIX iOS PWA INPUT ───
+document.addEventListener('DOMContentLoaded', () => {
+  // Forçar foco em inputs ao tocar — necessário no iOS PWA
+  document.querySelectorAll('input, textarea').forEach(el => {
+    el.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      this.focus();
+      // Scroll para o elemento ficar visível acima do teclado
+      setTimeout(() => {
+        this.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    });
+  });
+});
+
+// Observer para inputs adicionados dinamicamente (textarea do chat)
+const inputObserver = new MutationObserver(() => {
+  document.querySelectorAll('input:not([data-ios-fixed]), textarea:not([data-ios-fixed])').forEach(el => {
+    el.setAttribute('data-ios-fixed', '1');
+    el.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      this.focus();
+      setTimeout(() => {
+        this.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    });
+  });
+});
+inputObserver.observe(document.body, { childList: true, subtree: true });
 
 </script>
 </body>
