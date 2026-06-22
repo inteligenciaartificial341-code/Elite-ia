@@ -530,6 +530,63 @@
   }
   .ts-msg.fade { opacity: 0; }
 
+
+  /* ── MICROFONE ESTILO CLAUDE ── */
+  #mic-overlay {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #111;
+    padding: 16px 20px 32px;
+    z-index: 200;
+    border-top: 1px solid #333;
+    border-radius: 20px 20px 0 0;
+  }
+  #mic-overlay.active { display: flex; align-items: center; gap: 14px; }
+
+  #mic-cancel {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #333;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  #mic-waveform {
+    flex: 1;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .mic-bar {
+    width: 3px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 2px;
+    min-height: 3px;
+    transition: height 0.1s ease;
+  }
+  .mic-bar.active-bar { background: white; }
+
+  #mic-confirm {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #3ab5cc;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #mic-confirm:hover { background: #2a9fb5; }
+
 </style>
 </head>
 <body>
@@ -688,7 +745,7 @@
         onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
 
       <!-- Microfone slim SVG -->
-      <button class="btn-mic" title="Voz" onclick="window._startVoiceRecording ? window._startVoiceRecording() : startVoice()">
+      <button class="btn-mic" title="Voz" onclick="startVoice()">
         <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
           <rect x="9" y="2" width="6" height="12" rx="3"/>
           <path d="M5 10a7 7 0 0014 0"/>
@@ -903,47 +960,6 @@ async function handleFile(input) {
     addMessage('assistant', '⚠️ Erro ao processar o arquivo.');
   }
   input.value = '';
-}
-
-function startVoice() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    alert('Reconhecimento de voz não suportado neste navegador. Use Chrome ou Safari.');
-    return;
-  }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const rec = new SR();
-  rec.lang = 'pt-BR';
-  rec.continuous = false;
-  rec.interimResults = false;
-  rec.maxAlternatives = 1;
-
-  const micBtn = document.querySelector('.btn-mic');
-  if (micBtn) micBtn.style.color = '#ff6b6b'; // vermelho = gravando
-
-  rec.onstart = () => {
-    if (micBtn) micBtn.style.color = '#ff6b6b';
-  };
-
-  rec.onresult = (e) => {
-    const transcript = e.results[0][0].transcript;
-    const input = document.getElementById('msg-input');
-    input.value = transcript;
-    autoResize(input);
-    if (micBtn) micBtn.style.color = '';
-    // Enviar automaticamente após 600ms
-    setTimeout(() => { if (input.value.trim()) sendMessage(); }, 600);
-  };
-
-  rec.onerror = (e) => {
-    if (micBtn) micBtn.style.color = '';
-    if (e.error !== 'no-speech') alert('Erro no microfone: ' + e.error);
-  };
-
-  rec.onend = () => {
-    if (micBtn) micBtn.style.color = '';
-  };
-
-  try { rec.start(); } catch(e) { alert('Não foi possível iniciar o microfone.'); }
 }
 
 
@@ -1463,32 +1479,25 @@ async function executarBuscaEditais(comando) {
 }
 
 
-// ── INTERPRETAÇÃO INTELIGENTE DE INTENÇÃO VIA IA ──
-// A IA lê a mensagem + contexto e decide se é busca de editais
+// ── ROTEADOR INTELIGENTE DE INTENÇÃO ──
 async function interpretarIntencao(texto) {
-  const contexto = _ultimoContexto === 'busca'
-    ? `\n\nContexto: o usuário estava buscando editais de VRF${_ultimaUF ? ' em ' + _ultimaUF : ''}${_ultimosDias ? ' nos últimos ' + _ultimosDias + ' dias' : ''}.`
+  // System prompt focado APENAS em decidir se é busca de edital
+  const ctxMsg = _ultimoContexto === 'busca'
+    ? ` Contexto: o usuário estava buscando editais de VRF${_ultimaUF ? ' em ' + _ultimaUF : ''}${_ultimosDias ? ' nos últimos ' + _ultimosDias + ' dias' : ''}.`
     : '';
 
-  const prompt = `Analise a mensagem do usuário e responda APENAS com JSON válido, sem texto extra.
+  const prompt = `Você é um classificador de intenção. Analise a mensagem e responda SOMENTE com JSON válido, sem texto extra, sem markdown.${ctxMsg}
 
-Mensagem: "${texto}"${contexto}
+Mensagem do usuário: "${texto.replace(/"/g, "'")}"
 
-Determine:
-1. É uma solicitação de busca/pesquisa de editais ou licitações de VRF/ar condicionado/climatização?
-2. Qual UF/estado foi mencionado? (sigla de 2 letras ou vazio)
-3. Quantos dias para trás buscar? (número inteiro, padrão 30 se não especificado)
+Regras:
+- "ehBusca": true se o usuário quer buscar/pesquisar/encontrar editais, licitações, processos, obras ou contratos de VRF/ar condicionado/climatização
+- "ehBusca": false se é pergunta técnica, dúvida, pedido de explicação, qualificação, documentação, ou qualquer outro assunto
+- Se houver estado/UF brasileiro, coloque a sigla em "uf" (ex: "GO", "SP", "BA")
+- Se houver período em dias, coloque em "dias" (padrão: 30)
+- Considere o contexto: se o usuário estava buscando e pede "agora em GO" ou "nos últimos 60 dias", é continuação da busca
 
-Responda SOMENTE com este JSON:
-{"ehBusca": true/false, "uf": "GO" ou "", "dias": 30}
-
-Exemplos:
-"buscar editais VRF em Goiás" → {"ehBusca": true, "uf": "GO", "dias": 30}
-"agora somente em Goiás" → {"ehBusca": true, "uf": "GO", "dias": 30}
-"nos últimos 60 dias" → {"ehBusca": true, "uf": "", "dias": 60}
-"o que é VRF?" → {"ehBusca": false, "uf": "", "dias": 0}
-"quais documentos preciso?" → {"ehBusca": false, "uf": "", "dias": 0}
-"me manda as licitações de SP" → {"ehBusca": true, "uf": "SP", "dias": 30}`;
+Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou "", "dias": N}`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1496,38 +1505,42 @@ Exemplos:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 100,
+        max_tokens: 60,
         messages: [{ role: 'user', content: prompt }]
       })
     });
     const data = await res.json();
-    const raw = data.content?.[0]?.text || '{"ehBusca":false,"uf":"","dias":30}';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(raw);
 
-    // Herdar contexto anterior se não especificado
+    // Se é busca, herdar contexto anterior para campos não especificados
     if (parsed.ehBusca) {
       if (!parsed.uf && _ultimoContexto === 'busca' && _ultimaUF) parsed.uf = _ultimaUF;
-      if (!parsed.dias || parsed.dias === 30) {
-        if (_ultimoContexto === 'busca' && _ultimosDias && _ultimosDias !== 30) {
-          parsed.dias = _ultimosDias;
-        }
+      if ((!parsed.dias || parsed.dias === 30) && _ultimoContexto === 'busca' && _ultimosDias && _ultimosDias !== 30) {
+        parsed.dias = _ultimosDias;
       }
-      // Se o texto menciona explicitamente um número de dias, usa esse
-      const diasMatch = texto.match(/(\d+)\s*dias?/i);
-      if (diasMatch) parsed.dias = parseInt(diasMatch[1]);
+      // Extrair dias explicitamente se mencionado
+      const m = texto.match(/(\d+)\s*dias?/i);
+      if (m) parsed.dias = parseInt(m[1]);
+      if (!parsed.dias) parsed.dias = _ultimosDias || 30;
     }
-
     return parsed;
+
   } catch(e) {
-    // Fallback: usar lógica antiga se a IA falhar
+    // Fallback conservador: se não conseguiu classificar, vai para a IA normal
+    // Só usa busca se tiver palavras bem claras
+    const t = texto.toLowerCase();
+    const palavrasBusca = ['buscar', 'busca', 'pesquisar', 'pesquisa', 'procurar', 'encontrar',
+      'editais', 'licitações', 'licitacoes', 'tem licitação', 'tem edital', 'me manda', 'me mostre'];
+    const ehBusca = palavrasBusca.some(p => t.includes(p));
     return {
-      ehBusca: isBuscaComando(texto),
-      uf: detectarUF(texto) || (_ultimoContexto === 'busca' ? _ultimaUF : ''),
+      ehBusca,
+      uf: detectarUF(texto) || (_ultimoContexto === 'busca' && ehBusca ? _ultimaUF : ''),
       dias: _ultimosDias || 30
     };
   }
 }
+
 
 // ── BUSCA COM INTENÇÃO INTERPRETADA PELA IA ──
 async function executarBuscaEditaisInteligente(intencao) {
@@ -1603,79 +1616,125 @@ async function executarBuscaEditaisInteligente(intencao) {
   }
 }
 
-// ── MICROFONE iOS/Safari ──
-// Substituir a função existente por versão compatível com Safari
-(function() {
-  // No iOS Safari, a Speech Recognition precisa ser iniciada
-  // dentro de um evento de toque direto do usuário
-  const micBtnEl = document.querySelector ? null : null; // será buscado ao clicar
-  window._startVoiceRecording = function() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      alert('Reconhecimento de voz não suportado. Use Safari no iOS 15+ ou Chrome.');
-      return;
+
+
+
+// ── MICROFONE ESTILO CLAUDE ──
+let _rec = null;
+let _transcript = '';
+let _waveInterval = null;
+let _micBars = [];
+
+function _buildWaveform() {
+  const wf = document.getElementById('mic-waveform');
+  if (!wf) return;
+  wf.innerHTML = '';
+  _micBars = [];
+  for (let i = 0; i < 40; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'mic-bar';
+    bar.style.height = '3px';
+    wf.appendChild(bar);
+    _micBars.push(bar);
+  }
+}
+
+function _animateWave(level) {
+  if (!_micBars.length) return;
+  _micBars.forEach((bar, i) => {
+    const center = Math.abs(i - 20);
+    const base = Math.max(3, level * (1 - center / 22) * 36);
+    const jitter = Math.random() * base * 0.4;
+    bar.style.height = Math.max(3, base + jitter - jitter/2) + 'px';
+    bar.className = 'mic-bar' + (level > 0.1 ? ' active-bar' : '');
+  });
+}
+
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    alert('Microfone não suportado neste navegador. Use Safari iOS 15+ ou Chrome.');
+    return;
+  }
+
+  _transcript = '';
+  _rec = new SR();
+  _rec.lang = 'pt-BR';
+  _rec.continuous = false;
+  _rec.interimResults = true;
+  _rec.maxAlternatives = 1;
+
+  // Mostrar overlay
+  const overlay = document.getElementById('mic-overlay');
+  if (overlay) overlay.classList.add('active');
+  _buildWaveform();
+
+  // Animação da onda (sem acesso ao AudioContext no Safari, simular)
+  let tick = 0;
+  _waveInterval = setInterval(() => {
+    tick++;
+    const level = 0.3 + 0.5 * Math.abs(Math.sin(tick * 0.3)) + Math.random() * 0.2;
+    _animateWave(level);
+  }, 80);
+
+  _rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) _transcript += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
     }
-
-    const rec = new SR();
-    rec.lang = 'pt-BR';
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-
-    const micBtn = document.querySelector('.btn-mic');
-
-    rec.onstart = () => {
-      if (micBtn) {
-        micBtn.style.color = '#ff6b6b';
-        micBtn.style.transform = 'scale(1.2)';
-      }
-    };
-
-    rec.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      const inp = document.getElementById('msg-input');
-      if (inp) {
-        inp.value = transcript;
-        autoResize(inp);
-        inp.focus();
-      }
-      if (micBtn) {
-        micBtn.style.color = '';
-        micBtn.style.transform = '';
-      }
-      setTimeout(() => {
-        const current = document.getElementById('msg-input');
-        if (current && current.value.trim()) sendMessage();
-      }, 500);
-    };
-
-    rec.onerror = (event) => {
-      if (micBtn) {
-        micBtn.style.color = '';
-        micBtn.style.transform = '';
-      }
-      if (event.error === 'not-allowed') {
-        alert('Acesso ao microfone negado. Permita nas configurações do Safari.');
-      } else if (event.error !== 'no-speech') {
-        alert('Erro no microfone: ' + event.error);
-      }
-    };
-
-    rec.onend = () => {
-      if (micBtn) {
-        micBtn.style.color = '';
-        micBtn.style.transform = '';
-      }
-    };
-
-    try {
-      rec.start();
-    } catch(e) {
-      alert('Não foi possível iniciar o microfone: ' + e.message);
-    }
+    // Mostrar transcrição parcial no campo de texto
+    const inp = document.getElementById('msg-input');
+    if (inp) inp.value = _transcript || interim;
   };
-})();
+
+  _rec.onend = () => {
+    clearInterval(_waveInterval);
+    _animateWave(0);
+    // Se tem transcrição, manter overlay aberto para o usuário confirmar
+    if (!_transcript) cancelVoice();
+  };
+
+  _rec.onerror = (e) => {
+    clearInterval(_waveInterval);
+    cancelVoice();
+    if (e.error === 'not-allowed') alert('Permita o acesso ao microfone nas configurações do Safari.');
+    else if (e.error !== 'no-speech') alert('Erro: ' + e.error);
+  };
+
+  try { _rec.start(); } catch(e) { cancelVoice(); alert('Erro ao iniciar microfone: ' + e.message); }
+}
+
+function cancelVoice() {
+  if (_rec) { try { _rec.abort(); } catch(e) {} _rec = null; }
+  clearInterval(_waveInterval);
+  const overlay = document.getElementById('mic-overlay');
+  if (overlay) overlay.classList.remove('active');
+  const inp = document.getElementById('msg-input');
+  if (inp) { inp.value = ''; autoResize(inp); }
+  _transcript = '';
+}
+
+function confirmVoice() {
+  if (_rec) { try { _rec.stop(); } catch(e) {} _rec = null; }
+  clearInterval(_waveInterval);
+  const overlay = document.getElementById('mic-overlay');
+  if (overlay) overlay.classList.remove('active');
+  const inp = document.getElementById('msg-input');
+  if (inp && inp.value.trim()) {
+    setTimeout(() => sendMessage(), 100);
+  }
+  _transcript = '';
+}
 
 </script>
+
+<!-- Overlay de microfone estilo Claude -->
+<div id="mic-overlay">
+  <button id="mic-cancel" onclick="cancelVoice()" title="Cancelar">✕</button>
+  <div id="mic-waveform" id="mic-waveform"></div>
+  <button id="mic-confirm" onclick="confirmVoice()" title="Enviar">✓</button>
+</div>
+
 </body>
 </html>
