@@ -34,7 +34,7 @@
     --radius-sm:   8px;
   }
 
-  html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--teal-deep); color: var(--white); overflow: hidden; }
+  html, body { height: 100%; min-height: -webkit-fill-available; font-family: 'Inter', sans-serif; background: var(--teal-deep); color: var(--white); overflow: hidden; }
 
   /* ─── SHIELD SVG INLINE ─── */
   .shield-icon { display: inline-block; }
@@ -68,6 +68,7 @@
     display: none;
     flex-direction: column;
     height: 100vh;
+    height: -webkit-fill-available;
     max-width: 600px;
     margin: 0 auto;
     background: linear-gradient(180deg, var(--teal-deep) 0%, #0d3540 100%);
@@ -382,10 +383,33 @@
   }
 
 
-  @media (display-mode: standalone) {
-    body { padding-top: env(safe-area-inset-top); }
-    #login-screen { padding-top: calc(24px + env(safe-area-inset-top)); }
+
+  /* ── STANDALONE iOS: layout correto com safe areas ── */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    @media (display-mode: standalone) {
+      html {
+        /* Altura real disponível excluindo notch e barra home */
+        height: -webkit-fill-available;
+      }
+      body {
+        height: -webkit-fill-available;
+      }
+      #chat-screen {
+        height: 100%;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+      #login-screen {
+        padding-top: calc(env(safe-area-inset-top) + 20px);
+        padding-bottom: env(safe-area-inset-bottom);
+        min-height: -webkit-fill-available;
+      }
+      .chat-input-area {
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      }
+    }
   }
+
 </style>
 </head>
 <body>
