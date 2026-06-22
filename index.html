@@ -847,6 +847,8 @@ async function sendMessage() {
     return;
   }
 
+  // Resetar contexto de busca quando vai para IA normal
+  _ultimoContexto = null;
   conversationHistory.push({ role: 'user', content: text });
   addTyping();
   try {
@@ -900,10 +902,44 @@ async function handleFile(input) {
 }
 
 function startVoice() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { alert('Voz não suportada neste navegador.'); return; }
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Reconhecimento de voz não suportado neste navegador. Use Chrome ou Safari.');
+    return;
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const rec = new SR(); rec.lang = 'pt-BR'; rec.start();
-  rec.onresult = e => { document.getElementById('msg-input').value = e.results[0][0].transcript; };
+  const rec = new SR();
+  rec.lang = 'pt-BR';
+  rec.continuous = false;
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+
+  const micBtn = document.querySelector('.btn-mic');
+  if (micBtn) micBtn.style.color = '#ff6b6b'; // vermelho = gravando
+
+  rec.onstart = () => {
+    if (micBtn) micBtn.style.color = '#ff6b6b';
+  };
+
+  rec.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    const input = document.getElementById('msg-input');
+    input.value = transcript;
+    autoResize(input);
+    if (micBtn) micBtn.style.color = '';
+    // Enviar automaticamente após 600ms
+    setTimeout(() => { if (input.value.trim()) sendMessage(); }, 600);
+  };
+
+  rec.onerror = (e) => {
+    if (micBtn) micBtn.style.color = '';
+    if (e.error !== 'no-speech') alert('Erro no microfone: ' + e.error);
+  };
+
+  rec.onend = () => {
+    if (micBtn) micBtn.style.color = '';
+  };
+
+  try { rec.start(); } catch(e) { alert('Não foi possível iniciar o microfone.'); }
 }
 
 
@@ -1066,11 +1102,37 @@ function detectarUF(comando) {
   return '';
 }
 
-const BUSCA_TRIGGERS = ['buscar edital', 'busca edital', 'buscar editais', 'buscar licitaç', 'busca licitaç', 'procurar edital', 'editais de vrf', 'editais vrf', 'licitações de vrf', 'licitacoes de vrf', 'buscar vrf', 'busca vrf', 'mostrar edital', 'listar edital', 'pesquisar edital', 'pncp'];
+const BUSCA_TRIGGERS = [
+  'buscar edital', 'busca edital', 'buscar editais', 'buscar licitaç', 'busca licitaç',
+  'procurar edital', 'editais de vrf', 'editais vrf', 'licitações de vrf', 'licitacoes de vrf',
+  'buscar vrf', 'busca vrf', 'mostrar edital', 'listar edital', 'pesquisar edital', 'pncp',
+  'me manda licitaç', 'me mostre edital', 'quero ver edital', 'tem edital', 'tem licitaç',
+  'procura licitaç', 'acha edital', 'busca de edital'
+];
+
+// Rastrear último contexto — se estava em modo busca, continuações também são busca
+let _ultimoContexto = null; // 'busca' ou null
+let _ultimaUF = '';
+let _ultimosDias = 30;
 
 function isBuscaComando(texto) {
   const t = texto.toLowerCase();
-  return BUSCA_TRIGGERS.some(trigger => t.includes(trigger));
+  // Verificar trigger direto
+  if (BUSCA_TRIGGERS.some(trigger => t.includes(trigger))) return true;
+
+  // Verificar se é continuação de busca (contexto)
+  if (_ultimoContexto === 'busca') {
+    const continuacoes = [
+      'agora', 'nos últimos', 'nos ultimos', 'últimos', 'ultimos',
+      'refaz', 'refaça', 'tenta de novo', 'mais', 'mesmo', 'igual',
+      'amplia', 'ampliar', 'aumenta', 'só que', 'mas agora',
+      'desta vez', 'dessa vez', 'agora com', 'faça com', 'faz com',
+      'em vez de', 'ao invés', 'muda para', 'muda pra', 'troca para', 'troca pra',
+      'dias', 'semana', 'mês', 'mes'
+    ];
+    if (continuacoes.some(c => t.includes(c))) return true;
+  }
+  return false;
 }
 
 // ─── TOGGLE MOBILE/DESKTOP ───
@@ -1344,14 +1406,29 @@ async function mostrarThinkingStream(container, etapas) {
 }
 
 async function executarBuscaEditais(comando) {
-  const ufDetectada = detectarUF(comando);
-  let dias = 30;
+  // Detectar UF — se não informada, herdar da última busca
+  let ufDetectada = detectarUF(comando);
+  if (!ufDetectada && _ultimoContexto === 'busca' && _ultimaUF) {
+    ufDetectada = _ultimaUF; // herda UF da busca anterior
+  }
+
+  // Detectar período — se não informado, herdar
+  let dias = 0;
   const c = comando.toLowerCase();
   if (c.includes('hoje') || c.includes('24h')) dias = 2;
-  else if (c.includes('semana') || c.includes('7 dias')) dias = 7;
-  else if (c.includes('15 dias')) dias = 15;
-  else if (c.includes('60 dias') || c.includes('2 meses')) dias = 60;
-  else if (c.includes('90 dias') || c.includes('3 meses')) dias = 90;
+  else if (c.includes('semana') || c.includes('7 dias') || c.includes('sete dias')) dias = 7;
+  else if (c.includes('15 dias') || c.includes('quinze')) dias = 15;
+  else if (c.includes('60 dias') || c.includes('2 meses') || c.includes('sessenta')) dias = 60;
+  else if (c.includes('90 dias') || c.includes('3 meses') || c.includes('noventa') || c.includes('trimestre')) dias = 90;
+  else if (c.includes('30 dias') || c.includes('trinta') || c.includes('mes') || c.includes('mês')) dias = 30;
+
+  // Se não detectou período, herdar do contexto anterior
+  if (!dias) dias = (_ultimoContexto === 'busca' && _ultimosDias) ? _ultimosDias : 30;
+
+  // Salvar contexto atual
+  _ultimoContexto = 'busca';
+  _ultimaUF = ufDetectada;
+  _ultimosDias = dias;
 
   const container = document.getElementById('chat-messages');
 
@@ -1367,7 +1444,7 @@ async function executarBuscaEditais(comando) {
   try {
     const editais = await buscarEditaisPNCP(dias, ufDetectada);
     if (editais.length === 0) {
-      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ''}. Tente ampliar o período.`);
+      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ' em todo o Brasil'}. Tente ampliar o período ou remover o filtro de estado.`);
       return true;
     }
     editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
@@ -1376,7 +1453,7 @@ async function executarBuscaEditais(comando) {
     for (const e of top) out += formatarEdital(e);
     addMessage('assistant', out, true);
   } catch(err) {
-    addMessage('assistant', '⚠️ Erro ao acessar o PNCP. Tente novamente.');
+    addMessage('assistant', '⚠️ Erro ao acessar o PNCP. Tente novamente em instantes.');
   }
   return true;
 }
