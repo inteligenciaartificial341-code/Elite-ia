@@ -907,7 +907,6 @@ async function sendMessage() {
 
   if (intencao.ehBusca) {
     if (intencao.uf) _ultimaUF = intencao.uf;
-    if (intencao.dias) _ultimosDias = intencao.dias;
     _ultimoContexto = 'busca';
     await executarBuscaEditaisInteligente(intencao);
     return;
@@ -1007,35 +1006,74 @@ async function fetchPNCP(url) {
   throw new Error('Todos os métodos de conexão falharam' + (ultimoErro ? ': ' + ultimoErro.message : ''));
 }
 
-async function buscarEditaisPNCP(diasAtras, uf) {
+// Formato de data exigido pela API do PNCP: AAAAMMDD
+function _fmtDataPNCP(d) {
+  return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+}
+
+// Marca o status de um edital com base nas datas de proposta
+// Retorna: 'aberto' | 'futuro' | 'encerrado'
+function _statusEdital(edital) {
+  const agora = new Date();
+  const abertura = edital.dataAberturaProposta ? new Date(edital.dataAberturaProposta) : null;
+  const encerr = edital.dataEncerramentoProposta ? new Date(edital.dataEncerramentoProposta) : null;
+
+  if (encerr && encerr < agora) return 'encerrado';        // já passou
+  if (abertura && abertura > agora) return 'futuro';        // ainda vai abrir
+  if (encerr && encerr >= agora) return 'aberto';           // recebendo propostas
+  if (abertura && abertura <= agora && !encerr) return 'aberto';
+  return 'aberto'; // sem datas claras, assume aberto (veio do endpoint de proposta)
+}
+
+// Busca SOMENTE editais com proposta em aberto AGORA + os que ainda vão abrir.
+async function buscarEditaisPNCP(uf, diasFuturos = 45) {
   const hoje = new Date();
-  const inicio = new Date();
-  inicio.setDate(hoje.getDate() - diasAtras);
+  const dataHoje = _fmtDataPNCP(hoje);
 
-  const fmt = d => d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-  const dataFinal = fmt(hoje);
-  const dataInicial = fmt(inicio);
-
-  // 6=Pregão Eletrônico, 8=Dispensa, 4=Concorrência Eletrônica, 1=Leilão
+  // 6=Pregão Eletrônico, 8=Dispensa, 4=Concorrência Eletrônica
   const modalidades = [6, 8, 4];
   let todos = [];
+
+  // ── ETAPA 1: PROPOSTAS EM ABERTO ──
+  for (const mod of modalidades) {
+    let pagina = 1;
+    let totalPaginas = 1;
+    while (pagina <= totalPaginas && pagina <= 6) {
+      let url = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataHoje}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
+      if (uf) url += `&uf=${uf}`;
+      try {
+        const json = await fetchPNCP(url);
+        totalPaginas = json.totalPaginas || 1;
+        todos = todos.concat(json.data || []);
+        pagina++;
+      } catch(e) {
+        console.error('Erro proposta-aberta modalidade', mod, e);
+        break;
+      }
+    }
+  }
+
+  // ── ETAPA 2: PROPOSTAS QUE AINDA VÃO ABRIR (FUTURAS) ──
+  const inicioPub = new Date();
+  inicioPub.setDate(hoje.getDate() - 30);
+  const dataInicialPub = _fmtDataPNCP(inicioPub);
+  const fimPub = new Date();
+  fimPub.setDate(hoje.getDate() + diasFuturos);
+  const dataFinalPub = _fmtDataPNCP(fimPub);
 
   for (const mod of modalidades) {
     let pagina = 1;
     let totalPaginas = 1;
-
-    while (pagina <= totalPaginas && pagina <= 5) {
-      let url = `${PNCP_BASE}/contratacoes/publicacao?dataInicial=${dataInicial}&dataFinal=${dataFinal}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
+    while (pagina <= totalPaginas && pagina <= 4) {
+      let url = `${PNCP_BASE}/contratacoes/publicacao?dataInicial=${dataInicialPub}&dataFinal=${dataFinalPub}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
       if (uf) url += `&uf=${uf}`;
-
       try {
         const json = await fetchPNCP(url);
         totalPaginas = json.totalPaginas || 1;
-        const itens = json.data || [];
-        todos = todos.concat(itens);
+        todos = todos.concat(json.data || []);
         pagina++;
       } catch(e) {
-        console.error('Erro modalidade', mod, e);
+        console.error('Erro publicacao-futura modalidade', mod, e);
         break;
       }
     }
@@ -1055,17 +1093,44 @@ async function buscarEditaisPNCP(diasAtras, uf) {
     if (!vistos.has(id)) { vistos.add(id); unicos.push(e); }
   }
 
-  return unicos;
+  // Calcular status e DESCARTAR encerrados (foco: só aberto + futuro)
+  const resultado = [];
+  for (const e of unicos) {
+    const status = _statusEdital(e);
+    if (status === 'encerrado') continue;
+    e._status = status;
+    resultado.push(e);
+  }
+
+  return resultado;
+}
+
+// Ordena: abertos primeiro (quem encerra antes no topo), depois futuros (quem abre antes no topo)
+function ordenarPorUrgencia(editais) {
+  return editais.slice().sort((a, b) => {
+    const sa = a._status || _statusEdital(a);
+    const sb = b._status || _statusEdital(b);
+    if (sa !== sb) return sa === 'aberto' ? -1 : 1;
+    if (sa === 'aberto') {
+      const ea = a.dataEncerramentoProposta ? new Date(a.dataEncerramentoProposta).getTime() : Infinity;
+      const eb = b.dataEncerramentoProposta ? new Date(b.dataEncerramentoProposta).getTime() : Infinity;
+      return ea - eb;
+    } else {
+      const aa = a.dataAberturaProposta ? new Date(a.dataAberturaProposta).getTime() : Infinity;
+      const ab = b.dataAberturaProposta ? new Date(b.dataAberturaProposta).getTime() : Infinity;
+      return aa - ab;
+    }
+  });
 }
 
 function formatarEdital(edital) {
   const valor = edital.valorTotalEstimado
     ? 'R$ ' + Number(edital.valorTotalEstimado).toLocaleString('pt-BR', {minimumFractionDigits:2})
     : 'Não informado';
-  const abertura = edital.dataAberturaProposta
-    ? new Date(edital.dataAberturaProposta).toLocaleDateString('pt-BR') : '—';
-  const encerramento = edital.dataEncerramentoProposta
-    ? new Date(edital.dataEncerramentoProposta).toLocaleDateString('pt-BR') : '—';
+  const aberturaDate = edital.dataAberturaProposta ? new Date(edital.dataAberturaProposta) : null;
+  const encerrDate = edital.dataEncerramentoProposta ? new Date(edital.dataEncerramentoProposta) : null;
+  const abertura = aberturaDate ? aberturaDate.toLocaleDateString('pt-BR') : '—';
+  const encerramento = encerrDate ? encerrDate.toLocaleDateString('pt-BR') : '—';
   const modalidade = edital.modalidadeNome || '—';
   const orgao = edital.unidadeOrgao?.nomeUnidade || edital.orgaoEntidade?.razaoSocial || '—';
   const uf = edital.unidadeOrgao?.ufSigla || '—';
@@ -1073,8 +1138,35 @@ function formatarEdital(edital) {
   const link = edital.linkSistemaOrigem || edital.linkProcessoEletronico || '#';
   const numero = edital.numeroControlePNCP || '—';
 
+  // ── BADGE DE STATUS ──
+  const status = edital._status || _statusEdital(edital);
+  const agora = new Date();
+  const msDia = 1000 * 60 * 60 * 24;
+  let badge = '';
+
+  if (status === 'aberto') {
+    let txt = '✅ Proposta aberta';
+    if (encerrDate) {
+      const diasRest = Math.ceil((encerrDate - agora) / msDia);
+      if (diasRest <= 0) txt = '✅ Encerra hoje';
+      else if (diasRest === 1) txt = '✅ Aberta · encerra amanhã';
+      else txt = `✅ Aberta · ${diasRest} dias p/ encerrar`;
+    }
+    badge = `<span style="display:inline-block;background:#1f9d55;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">${txt}</span>`;
+  } else if (status === 'futuro') {
+    let txt = '⏳ Vai abrir';
+    if (aberturaDate) {
+      const diasAte = Math.ceil((aberturaDate - agora) / msDia);
+      if (diasAte <= 0) txt = '⏳ Abre hoje';
+      else if (diasAte === 1) txt = '⏳ Abre amanhã';
+      else txt = `⏳ Abre em ${diasAte} dias`;
+    }
+    badge = `<span style="display:inline-block;background:#d4860b;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">${txt}</span>`;
+  }
+
   return `
     <div style="background:#f0f9fb;border:1px solid #b8e0ea;border-radius:10px;padding:12px 14px;margin-top:10px;font-size:13px;">
+      ${badge}
       <div style="font-weight:700;color:#1a5f6e;margin-bottom:8px;font-size:13px;line-height:1.4;">${edital.objetoCompra || 'Sem descrição'}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-bottom:8px;color:#2a4a50;">
         <div><b>Valor:</b><br>${valor}</div>
@@ -1435,45 +1527,36 @@ async function executarBuscaEditais(comando) {
     ufDetectada = _ultimaUF; // herda UF da busca anterior
   }
 
-  // Detectar período — se não informado, herdar
-  let dias = 0;
-  const c = comando.toLowerCase();
-  if (c.includes('hoje') || c.includes('24h')) dias = 2;
-  else if (c.includes('semana') || c.includes('7 dias') || c.includes('sete dias')) dias = 7;
-  else if (c.includes('15 dias') || c.includes('quinze')) dias = 15;
-  else if (c.includes('60 dias') || c.includes('2 meses') || c.includes('sessenta')) dias = 60;
-  else if (c.includes('90 dias') || c.includes('3 meses') || c.includes('noventa') || c.includes('trimestre')) dias = 90;
-  else if (c.includes('30 dias') || c.includes('trinta') || c.includes('mes') || c.includes('mês')) dias = 30;
-
-  // Se não detectou período, herdar do contexto anterior
-  if (!dias) dias = (_ultimoContexto === 'busca' && _ultimosDias) ? _ultimosDias : 30;
-
   // Salvar contexto atual
   _ultimoContexto = 'busca';
   _ultimaUF = ufDetectada;
-  _ultimosDias = dias;
 
   const container = document.getElementById('chat-messages');
 
   const etapas = [
     { texto: 'Analisando pedido...', duracao: 800 },
     { texto: `Acessando portal PNCP${ufDetectada ? ' · ' + ufDetectada : ' · Todo o Brasil'}`, duracao: 1000 },
-    { texto: `Filtrando editais de VRF — últimos ${dias} dias`, duracao: 900 },
+    { texto: 'Buscando propostas abertas e que vão abrir...', duracao: 900 },
     { texto: 'Processando modalidades de contratação...', duracao: 800 },
   ];
 
   await mostrarThinkingStream(container, etapas);
 
   try {
-    const editais = await buscarEditaisPNCP(dias, ufDetectada);
+    const editais = await buscarEditaisPNCP(ufDetectada);
     if (editais.length === 0) {
-      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ' em todo o Brasil'}. Tente ampliar o período ou remover o filtro de estado.`);
+      addMessage('assistant', `Nenhum edital de VRF com proposta aberta ou prevista${ufDetectada ? ' em ' + ufDetectada : ' no Brasil'} no momento. Tente novamente mais tarde ou remova o filtro de estado.`);
       return true;
     }
-    editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
-    const top = editais.slice(0, 15);
-    let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
+    const ordenados = ordenarPorUrgencia(editais);
+    const abertos = ordenados.filter(e => (e._status || _statusEdital(e)) === 'aberto');
+    const futuros = ordenados.filter(e => (e._status || _statusEdital(e)) === 'futuro');
+    const top = ordenados.slice(0, 20);
+    let out = `<strong>📋 ${editais.length} edital(is) VRF — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
     for (const e of top) out += formatarEdital(e);
+    if (editais.length > top.length) {
+      out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${editais.length}.</div>`;
+    }
     addMessage('assistant', out, true);
   } catch(err) {
     addMessage('assistant', '⚠️ Erro ao acessar o PNCP. Tente novamente em instantes.');
@@ -1486,7 +1569,7 @@ async function executarBuscaEditais(comando) {
 async function interpretarIntencao(texto) {
   // System prompt focado APENAS em decidir se é busca de edital
   const ctxMsg = _ultimoContexto === 'busca'
-    ? ` Contexto: o usuário estava buscando editais de VRF${_ultimaUF ? ' em ' + _ultimaUF : ''}${_ultimosDias ? ' nos últimos ' + _ultimosDias + ' dias' : ''}.`
+    ? ` Contexto: o usuário acabou de buscar editais de VRF${_ultimaUF ? ' em ' + _ultimaUF : ' no Brasil'}.`
     : '';
 
   const prompt = `Você é um classificador de intenção. Analise a mensagem e responda SOMENTE com JSON válido, sem texto extra, sem markdown.${ctxMsg}
@@ -1494,13 +1577,12 @@ async function interpretarIntencao(texto) {
 Mensagem do usuário: "${texto.replace(/"/g, "'")}"
 
 Regras:
-- "ehBusca": true se o usuário quer buscar/pesquisar/encontrar editais, licitações, processos, obras ou contratos de VRF/ar condicionado/climatização
-- "ehBusca": false se é pergunta técnica, dúvida, pedido de explicação, qualificação, documentação, ou qualquer outro assunto
-- Se houver estado/UF brasileiro, coloque a sigla em "uf" (ex: "GO", "SP", "BA")
-- Se houver período em dias, coloque em "dias" (padrão: 30)
-- Considere o contexto: se o usuário estava buscando e pede "agora em GO" ou "nos últimos 60 dias", é continuação da busca
+- "ehBusca": true se o usuário quer buscar/pesquisar/encontrar/ver editais, licitações, processos, propostas ou contratos de VRF/ar condicionado/climatização/refrigeração (inclui "tem licitação aberta?", "quais editais estão abertos?", "me mostra editais")
+- "ehBusca": false se é pergunta técnica, dúvida, explicação, qualificação, documentação, análise de PDF, ou outro assunto
+- Se houver estado/UF brasileiro, coloque a sigla em "uf" (ex: "GO", "SP", "BA"); senão deixe "" (busca nacional)
+- Considere o contexto: se o usuário estava buscando e pede "agora em GO" ou "e em SP?", é continuação da busca
 
-Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou "", "dias": N}`;
+Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou ""}`;
 
   try {
     const data = await callAnthropicAPI({
@@ -1511,30 +1593,21 @@ Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou "", "dias": N}`;
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(raw);
 
-    // Se é busca, herdar contexto anterior para campos não especificados
     if (parsed.ehBusca) {
       if (!parsed.uf && _ultimoContexto === 'busca' && _ultimaUF) parsed.uf = _ultimaUF;
-      if ((!parsed.dias || parsed.dias === 30) && _ultimoContexto === 'busca' && _ultimosDias && _ultimosDias !== 30) {
-        parsed.dias = _ultimosDias;
-      }
-      // Extrair dias explicitamente se mencionado
-      const m = texto.match(/(\d+)\s*dias?/i);
-      if (m) parsed.dias = parseInt(m[1]);
-      if (!parsed.dias) parsed.dias = _ultimosDias || 30;
     }
     return parsed;
 
   } catch(e) {
     // Fallback conservador: se não conseguiu classificar, vai para a IA normal
-    // Só usa busca se tiver palavras bem claras
     const t = texto.toLowerCase();
     const palavrasBusca = ['buscar', 'busca', 'pesquisar', 'pesquisa', 'procurar', 'encontrar',
-      'editais', 'licitações', 'licitacoes', 'tem licitação', 'tem edital', 'me manda', 'me mostre'];
+      'editais', 'licitações', 'licitacoes', 'tem licitação', 'tem edital', 'me manda', 'me mostre',
+      'proposta aberta', 'propostas abertas', 'em aberto'];
     const ehBusca = palavrasBusca.some(p => t.includes(p));
     return {
       ehBusca,
-      uf: detectarUF(texto) || (_ultimoContexto === 'busca' && ehBusca ? _ultimaUF : ''),
-      dias: _ultimosDias || 30
+      uf: detectarUF(texto) || (_ultimoContexto === 'busca' && ehBusca ? _ultimaUF : '')
     };
   }
 }
@@ -1542,7 +1615,9 @@ Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou "", "dias": N}`;
 
 // ── BUSCA COM INTENÇÃO INTERPRETADA PELA IA ──
 async function executarBuscaEditaisInteligente(intencao) {
-  const { uf: ufDetectada, dias } = intencao;
+  const ufDetectada = intencao.uf || '';
+  _ultimoContexto = 'busca';
+  _ultimaUF = ufDetectada;
   const container = document.getElementById('chat-messages');
 
   // Thinking stream — fica ativo até o resultado chegar de verdade
@@ -1575,13 +1650,12 @@ async function executarBuscaEditaisInteligente(intencao) {
   await setMsg(`Acessando portal PNCP${ufDetectada ? ' · ' + ufDetectada : ' · Todo o Brasil'}`);
   await new Promise(r => setTimeout(r, 800));
 
-  await setMsg(`Filtrando editais de VRF — últimos ${dias} dias`);
-  // NÃO esperar tempo fixo aqui — a busca começa agora e o stream fica ativo
+  await setMsg('Buscando propostas abertas e que vão abrir...');
 
   try {
     // Iniciar busca real enquanto stream está ativo
     const [editais] = await Promise.all([
-      buscarEditaisPNCP(dias, ufDetectada),
+      buscarEditaisPNCP(ufDetectada),
       new Promise(r => setTimeout(r, 600)) // mínimo de tempo nesta etapa
     ]);
 
@@ -1595,14 +1669,21 @@ async function executarBuscaEditaisInteligente(intencao) {
     wrap.remove();
 
     if (editais.length === 0) {
-      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ' em todo o Brasil'}. Tente ampliar o período ou remover o filtro de estado.`);
+      addMessage('assistant', `Nenhum edital de VRF com proposta aberta ou prevista${ufDetectada ? ' em ' + ufDetectada : ' no Brasil'} no momento. Tente novamente mais tarde ou remova o filtro de estado.`);
       return;
     }
 
-    editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
-    const top = editais.slice(0, 15);
-    let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
+    // Ordenar por urgência: abertos primeiro, depois futuros
+    const ordenados = ordenarPorUrgencia(editais);
+    const abertos = ordenados.filter(e => (e._status || _statusEdital(e)) === 'aberto');
+    const futuros = ordenados.filter(e => (e._status || _statusEdital(e)) === 'futuro');
+    const top = ordenados.slice(0, 20);
+
+    let out = `<strong>📋 ${editais.length} edital(is) VRF — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
     for (const e of top) out += formatarEdital(e);
+    if (editais.length > top.length) {
+      out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${editais.length}.</div>`;
+    }
     addMessage('assistant', out, true);
 
   } catch(err) {
