@@ -350,6 +350,38 @@
     transition: color 0.2s;
   }
   .btn-view-toggle:hover { color: var(--white); }
+
+  /* Botão de voz (TTS) */
+  .btn-voice {
+    background: none;
+    border: none;
+    color: var(--white-80);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: color 0.2s;
+    position: relative;
+  }
+  .btn-voice:hover { color: var(--white); }
+  .btn-voice.voice-on { color: var(--teal-glow); }
+  .btn-voice.voice-on::after {
+    content: '';
+    position: absolute;
+    bottom: 1px; right: 1px;
+    width: 6px; height: 6px;
+    background: var(--teal-glow);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--teal-glow);
+  }
+  /* Estado "falando agora" — pulsa */
+  .btn-voice.speaking { color: var(--teal-glow); animation: voicePulse 1s ease-in-out infinite; }
+  @keyframes voicePulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(1.12); }
+  }
+
   .btn-new-chat { margin-left: 0; }
   .header-right {
     display: flex;
@@ -698,6 +730,18 @@
       </svg>
       <svg id="icon-desktop" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" style="display:none">
         <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+      </svg>
+    </button>
+    <button class="btn-voice" onclick="toggleVoz()" title="Ativar/desativar voz" id="voice-toggle-btn">
+      <svg id="icon-voice-off" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
+        <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+        <line x1="23" y1="9" x2="17" y2="15"/>
+        <line x1="17" y1="9" x2="23" y2="15"/>
+      </svg>
+      <svg id="icon-voice-on" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" style="display:none">
+        <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+        <path d="M15.54 8.46a5 5 0 010 7.07"/>
+        <path d="M19.07 4.93a10 10 0 010 14.14"/>
       </svg>
     </button>
     <button class="btn-new-chat" onclick="newChat()" title="Nova conversa">
@@ -1429,6 +1473,8 @@ addMessage = function(role, content, isHTML) {
   if (role === 'assistant') {
     const title = generateTitle(_firstUserMessage || 'Conversa');
     saveCurrentConversation(title);
+    // Falar a resposta se o modo voz estiver ativo
+    falarResposta(content);
   }
 };
 
@@ -1804,6 +1850,116 @@ function confirmVoice() {
     setTimeout(() => sendMessage(), 100);
   }
   _transcript = '';
+}
+
+
+// ══════════════════════════════════════════════════
+//  CHAT DE VOZ — TEXT TO SPEECH (Web Speech API)
+// ══════════════════════════════════════════════════
+let _vozAtiva = false;                 // estado do toggle
+let _vozEscolhida = null;              // SpeechSynthesisVoice selecionada
+let _vozesDisponiveis = [];            // cache de vozes pt-BR
+
+// Carrega e prioriza vozes pt-BR (voz feminina natural se houver)
+function _carregarVozes() {
+  if (!('speechSynthesis' in window)) return;
+  const todas = window.speechSynthesis.getVoices();
+  if (!todas.length) return; // ainda não carregou — onvoiceschanged dispara depois
+
+  // Filtra português (Brasil primeiro, depois Portugal)
+  const ptBR = todas.filter(v => /pt[-_]?BR/i.test(v.lang));
+  const ptPT = todas.filter(v => /pt[-_]?PT/i.test(v.lang));
+  const ptQualquer = todas.filter(v => /^pt/i.test(v.lang));
+  _vozesDisponiveis = [...new Set([...ptBR, ...ptPT, ...ptQualquer])];
+
+  // Preferência: vozes premium/naturais conhecidas do iOS e Google
+  const preferidas = ['Luciana', 'Joana', 'Catarina', 'Google português do Brasil', 'Felipe', 'Fernanda'];
+  _vozEscolhida =
+    _vozesDisponiveis.find(v => preferidas.some(p => v.name.includes(p))) ||
+    _vozesDisponiveis[0] ||
+    todas[0] ||
+    null;
+}
+
+if ('speechSynthesis' in window) {
+  _carregarVozes();
+  window.speechSynthesis.onvoiceschanged = _carregarVozes;
+}
+
+// Liga/desliga o modo voz
+function toggleVoz() {
+  if (!('speechSynthesis' in window)) {
+    alert('Seu navegador não suporta leitura por voz. Use Safari iOS 15+ ou Chrome.');
+    return;
+  }
+  _vozAtiva = !_vozAtiva;
+  const btn = document.getElementById('voice-toggle-btn');
+  const iconOff = document.getElementById('icon-voice-off');
+  const iconOn = document.getElementById('icon-voice-on');
+
+  if (_vozAtiva) {
+    btn.classList.add('voice-on');
+    if (iconOff) iconOff.style.display = 'none';
+    if (iconOn) iconOn.style.display = 'block';
+    _carregarVozes();
+    // iOS exige um "toque" inicial para liberar áudio — fala curta de confirmação
+    _falarTexto('Voz ativada.');
+  } else {
+    btn.classList.remove('voice-on', 'speaking');
+    if (iconOff) iconOff.style.display = 'block';
+    if (iconOn) iconOn.style.display = 'none';
+    pararFala();
+  }
+}
+
+// Remove markdown/HTML antes de falar (evita ler "asterisco", tags, emojis ruins)
+function _limparParaFala(texto) {
+  let t = texto;
+  t = t.replace(/<[^>]+>/g, ' ');           // tags HTML
+  t = t.replace(/\*\*(.*?)\*\*/g, '$1');     // negrito markdown
+  t = t.replace(/[*_`#>]/g, '');             // símbolos markdown soltos
+  t = t.replace(/https?:\/\/\S+/g, 'link');  // URLs viram "link"
+  t = t.replace(/[📋✅⏳🟢🟠👋📎⚠️🔊🎤]/g, ''); // emojis comuns do app
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+// Fala um texto em voz alta
+function _falarTexto(texto) {
+  if (!('speechSynthesis' in window)) return;
+  const limpo = _limparParaFala(texto);
+  if (!limpo) return;
+
+  // Cancela qualquer fala anterior antes de começar
+  window.speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(limpo);
+  u.lang = 'pt-BR';
+  u.rate = 1.0;
+  u.pitch = 1.0;
+  u.volume = 1.0;
+  if (_vozEscolhida) u.voice = _vozEscolhida;
+
+  const btn = document.getElementById('voice-toggle-btn');
+  u.onstart = () => { if (btn && _vozAtiva) btn.classList.add('speaking'); };
+  u.onend   = () => { if (btn) btn.classList.remove('speaking'); };
+  u.onerror = () => { if (btn) btn.classList.remove('speaking'); };
+
+  window.speechSynthesis.speak(u);
+}
+
+// Para a fala imediatamente
+function pararFala() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  const btn = document.getElementById('voice-toggle-btn');
+  if (btn) btn.classList.remove('speaking');
+}
+
+// Falar uma resposta da IA (só se voz estiver ativa)
+function falarResposta(conteudo) {
+  if (!_vozAtiva) return;
+  if (typeof conteudo !== 'string') return;
+  _falarTexto(conteudo);
 }
 
 
