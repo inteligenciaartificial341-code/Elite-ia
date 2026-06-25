@@ -587,33 +587,6 @@
   }
   #mic-confirm:hover { background: #2a9fb5; }
 
-  /* ─── MODAL API KEY ─── */
-  #apikey-modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    background: rgba(0,0,0,0.6);
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
-  #apikey-modal.open { display: flex; }
-  .apikey-modal-card {
-    background: #0a2d36;
-    border: 1px solid var(--white-20);
-    border-radius: 16px;
-    padding: 28px 24px;
-    width: 100%;
-    max-width: 360px;
-  }
-  .apikey-modal-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-  .apikey-modal-card p { font-size: 12px; color: var(--white-80); margin-bottom: 18px; line-height: 1.5; }
-  .apikey-modal-card input { width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-sm); padding: 11px 14px; color: var(--white); font-size: 14px; font-family: 'Inter', sans-serif; margin-bottom: 16px; outline: none; }
-  .apikey-modal-card input:focus { border-color: var(--teal-glow); }
-  .apikey-modal-actions { display: flex; gap: 10px; }
-  .btn-modal-save { flex: 1; background: linear-gradient(135deg, var(--teal-light), var(--teal-glow)); border: none; border-radius: var(--radius-sm); padding: 11px; color: var(--white); font-size: 14px; font-weight: 600; cursor: pointer; }
-  .btn-modal-cancel { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-sm); padding: 11px 16px; color: var(--white-80); font-size: 14px; cursor: pointer; }
 
 </style>
 </head>
@@ -631,16 +604,7 @@
     <input type="text" id="login-user" placeholder="seu usuário" autocorrect="off" autocapitalize="none" spellcheck="false"/>
     <label>Senha</label>
     <input type="password" id="login-pass" placeholder="••••••••" autocorrect="off" autocapitalize="none"/>
-    <label style="margin-top:4px;">Chave API Anthropic</label>
-    <div style="position:relative;">
-      <input type="password" id="login-apikey" placeholder="sk-ant-..." autocorrect="off" autocapitalize="none" autocomplete="off" style="padding-right:38px;"/>
-      <button onclick="toggleApiKeyVisibility()" title="Mostrar/ocultar" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.45);padding:0;margin-bottom:18px;" id="apikey-eye">
-        <svg id="eye-icon" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-      </button>
-    </div>
-    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:-12px;margin-bottom:18px;line-height:1.4;">
-      Necessária para chat com IA. <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--teal-glow);text-decoration:none;">Obter chave ↗</a>
-    </div>
+
     <button class="btn-login" onclick="doLogin()">Entrar</button>
     <div class="login-error" id="login-error">Usuário ou senha incorretos.</div>
   </div>
@@ -689,14 +653,6 @@
   <button class="sidebar-item" onclick="document.getElementById('file-input').click(); closeSidebar()">
     <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Novo Documento
-  </button>
-
-  <div class="sidebar-divider"></div>
-  <div class="sidebar-section-label">Configurações</div>
-
-  <button class="sidebar-item" onclick="abrirConfigApiKey()">
-    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
-    API Key <span id="sidebar-apikey-status" style="font-size:10px;margin-left:4px;color:rgba(255,255,255,0.35);"></span>
   </button>
 
   <div class="sidebar-divider"></div>
@@ -764,15 +720,6 @@
       <button class="quick-action" onclick="sendQuick('Buscar editais VRF com proposta aberta agora')">
         <span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>Buscar editais VRF
       </button>
-      <button class="quick-action" onclick="sendQuick('Quais documentos geralmente são exigidos em licitações de VRF?')">
-        <span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>Documentos exigidos
-      </button>
-      <button class="quick-action" onclick="sendQuick('Como calcular o quantitativo de materiais para uma proposta VRF?')">
-        <span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg></span>Calcular materiais
-      </button>
-      <button class="quick-action" onclick="sendQuick('O que é capacidade técnica operacional em licitações de ar condicionado?')">
-        <span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></span>Qualificação técnica
-      </button>
     </div>
   </div>
 
@@ -816,66 +763,19 @@
 const USERS = { "confortelite": "elitear2024" };
 let currentUser = '';
 
-function toggleApiKeyVisibility() {
-  const inp = document.getElementById('login-apikey');
-  const icon = document.getElementById('eye-icon');
-  if (inp.type === 'password') {
-    inp.type = 'text';
-    icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
-  } else {
-    inp.type = 'password';
-    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
-  }
-}
-
-// ─── API HEADERS ───
-function getApiHeaders() {
-  const key = localStorage.getItem('elite_api_key') || '';
-  return {
-    'Content-Type': 'application/json',
-    'x-api-key': key,
-    'anthropic-version': '2023-06-01',
-    'anthropic-dangerous-direct-browser-access': 'true'
-  };
-}
-
-function hasApiKey() {
-  return !!(localStorage.getItem('elite_api_key') || '').trim();
-}
-
 function doLogin() {
   const user = document.getElementById('login-user').value.trim().toLowerCase();
   const pass = document.getElementById('login-pass').value;
-  const apiKey = document.getElementById('login-apikey').value.trim();
-
   if (USERS[user] && USERS[user] === pass) {
     currentUser = user;
-    // Salvar API key se fornecida
-    if (apiKey) {
-      localStorage.setItem('elite_api_key', apiKey);
-    }
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('chat-screen').style.display = 'flex';
     document.getElementById('login-error').style.display = 'none';
     const initials = user.substring(0,2).toUpperCase();
     document.getElementById('sidebar-avatar').textContent = initials;
     document.getElementById('sidebar-username').textContent = user.charAt(0).toUpperCase() + user.slice(1);
-
-    // Pré-preencher o campo de API key na próxima abertura
-    const savedKey = localStorage.getItem('elite_api_key') || '';
-    if (savedKey) document.getElementById('login-apikey').value = savedKey;
-
-    // Mostrar aviso se não houver API key
-    if (!hasApiKey()) {
-      setTimeout(() => {
-        addMessage('assistant', '⚠️ <strong>API key não configurada.</strong> Para usar o chat com IA, faça logout e insira sua chave API Anthropic na tela de login. <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--teal-glow)">Obter chave ↗</a>', true);
-      }, 500);
-    }
-
-  // Inicializar histórico ao fazer login
-  startNewConversation();
-  renderRecentsList();
-
+    startNewConversation();
+    renderRecentsList();
   } else {
     document.getElementById('login-error').style.display = 'block';
   }
@@ -887,11 +787,25 @@ function doLogout() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-user').value = '';
   document.getElementById('login-pass').value = '';
-  // Manter a API key preenchida para facilitar o re-login
-  const savedKey = localStorage.getItem('elite_api_key') || '';
-  document.getElementById('login-apikey').value = savedKey;
   conversationHistory = [];
   resetMessages();
+}
+
+// ─── API — proxy seguro via Vercel (/api/chat) ───
+// A chave NUNCA sai do servidor. O front-end chama /api/chat.
+const ANTHROPIC_ENDPOINT = '/api/chat';
+
+function hasApiKey() {
+  return true; // chave fica no servidor Vercel, sempre disponível
+}
+
+async function callAnthropicAPI(body) {
+  const res = await fetch(ANTHROPIC_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return res.json();
 }
 
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
@@ -912,19 +826,14 @@ let conversationHistory = [];
 const SYSTEM_PROMPT = `Você é a Elite IA, assistente especializada em licitações públicas de sistemas VRF (Variable Refrigerant Flow) e ar condicionado no Brasil, desenvolvida pela Elite Ar Soluções em Engenharia Térmica.
 
 Suas especialidades:
-- Análise de editais de licitação e Termos de Referência
+- Busca e análise de editais de licitação (PNCP, ComprasNet, SisLog, Compras MG, Compras MT, e-Licitações)
 - Extração de informações-chave: valor estimado, prazo, documentações exigidas, qualificação técnica e operacional
 - Cálculo de quantitativos de materiais VRF (tubulação de cobre, isolamento, suportes, etc.)
+- Análise de Termos de Referência
 - Orientação sobre habilitação jurídica, fiscal, técnica e econômica
 - Comparação de propostas e estratégia de precificação
 
-IMPORTANTE — Busca de editais:
-Este aplicativo JÁ POSSUI busca automática de editais integrada à API oficial do PNCP (Portal Nacional de Contratações Públicas). Quando o usuário pede para buscar editais/licitações de VRF, o próprio app consulta o PNCP em tempo real e retorna apenas as propostas EM ABERTO (recebendo propostas agora) e as que AINDA VÃO ABRIR (futuras). Editais encerrados são descartados automaticamente.
-- NUNCA diga que não tem acesso às plataformas ou que a busca está em desenvolvimento — ela funciona.
-- Se o usuário quiser buscar, basta pedir (ex.: "buscar editais VRF em SP", "tem licitação aberta agora?"). O app aciona a busca sozinho.
-- Para verificar um edital específico que o usuário já tem em mãos, peça o PDF para análise.
-
-Sempre responda em português brasileiro, de forma objetiva e técnica.
+Sempre responda em português brasileiro. Seja objetivo e técnico. Quando o usuário pedir busca de editais, informe que a busca automatizada está em desenvolvimento e oriente como acessar manualmente.
 
 Ao analisar PDFs, extraia: valor estimado, prazo de execução, documentações exigidas, qualificação técnica, capacidade operacional e resumo do Termo de Referência.`;
 
@@ -941,9 +850,6 @@ function resetMessages() {
     </div>
     <div class="quick-actions">
       <button class="quick-action" onclick="sendQuick('Buscar editais VRF com proposta aberta agora')"><span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>Buscar editais VRF</button>
-      <button class="quick-action" onclick="sendQuick('Quais documentos geralmente são exigidos em licitações de VRF?')"><span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>Documentos exigidos</button>
-      <button class="quick-action" onclick="sendQuick('Como calcular o quantitativo de materiais para uma proposta VRF?')"><span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg></span>Calcular materiais</button>
-      <button class="quick-action" onclick="sendQuick('O que é capacidade técnica operacional em licitações de ar condicionado?')"><span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></span>Qualificação técnica</button>
     </div>`;
 }
 
@@ -1001,6 +907,7 @@ async function sendMessage() {
 
   if (intencao.ehBusca) {
     if (intencao.uf) _ultimaUF = intencao.uf;
+    if (intencao.dias) _ultimosDias = intencao.dias;
     _ultimoContexto = 'busca';
     await executarBuscaEditaisInteligente(intencao);
     return;
@@ -1010,21 +917,10 @@ async function sendMessage() {
   conversationHistory.push({ role: 'user', content: text });
   addTyping();
   try {
-    if (!hasApiKey()) {
-      removeTyping();
-      addMessage('assistant', '⚠️ <strong>API key não configurada.</strong> Faça logout e insira sua chave Anthropic na tela de login. <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--teal-glow)">Obter chave ↗</a>', true);
-      return;
-    }
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: getApiHeaders(),
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT, messages: conversationHistory })
-    });
-    const data = await response.json();
+    const data = await callAnthropicAPI({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT, messages: conversationHistory });
     removeTyping();
     if (data.error) {
-      const msg = data.error.message || 'Erro na API.';
-      addMessage('assistant', `⚠️ Erro da API: ${msg}${data.error.type === 'authentication_error' ? ' — Verifique sua API key.' : ''}`);
+      addMessage('assistant', `⚠️ Erro da API: ${data.error.message || 'Tente novamente.'}`);
       return;
     }
     const reply = data.content?.[0]?.text || 'Erro ao obter resposta.';
@@ -1052,21 +948,10 @@ async function handleFile(input) {
   conversationHistory.push(userMsg);
   addTyping();
   try {
-    if (!hasApiKey()) {
-      removeTyping();
-      addMessage('assistant', '⚠️ <strong>API key não configurada.</strong> Faça logout e insira sua chave Anthropic na tela de login. <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--teal-glow)">Obter chave ↗</a>', true);
-      input.value = '';
-      return;
-    }
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: getApiHeaders(),
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT, messages: conversationHistory })
-    });
-    const data = await response.json();
+    const data = await callAnthropicAPI({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT, messages: conversationHistory });
     removeTyping();
     if (data.error) {
-      addMessage('assistant', `⚠️ Erro da API: ${data.error.message || 'Erro desconhecido.'}`);
+      addMessage('assistant', `⚠️ Erro ao processar PDF: ${data.error.message || 'Tente novamente.'}`);
       input.value = '';
       return;
     }
@@ -1122,80 +1007,35 @@ async function fetchPNCP(url) {
   throw new Error('Todos os métodos de conexão falharam' + (ultimoErro ? ': ' + ultimoErro.message : ''));
 }
 
-// Formato de data exigido pela API do PNCP: AAAAMMDD
-function _fmtDataPNCP(d) {
-  return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-}
-
-// Marca o status de um edital com base nas datas de proposta
-// Retorna: 'aberto' | 'futuro' | 'encerrado'
-function _statusEdital(edital) {
-  const agora = new Date();
-  const abertura = edital.dataAberturaProposta ? new Date(edital.dataAberturaProposta) : null;
-  const encerr = edital.dataEncerramentoProposta ? new Date(edital.dataEncerramentoProposta) : null;
-
-  if (encerr && encerr < agora) return 'encerrado';        // já passou
-  if (abertura && abertura > agora) return 'futuro';        // ainda vai abrir
-  if (encerr && encerr >= agora) return 'aberto';           // recebendo propostas
-  if (abertura && abertura <= agora && !encerr) return 'aberto';
-  return 'aberto'; // sem datas claras, assume aberto (veio do endpoint de proposta)
-}
-
-// Busca SOMENTE editais com proposta em aberto AGORA + os que ainda vão abrir.
-// uf = sigla do estado (opcional). diasFuturos = janela de previsão para editais futuros.
-async function buscarEditaisPNCP(uf, diasFuturos = 45) {
+async function buscarEditaisPNCP(diasAtras, uf) {
   const hoje = new Date();
-  const dataHoje = _fmtDataPNCP(hoje);
+  const inicio = new Date();
+  inicio.setDate(hoje.getDate() - diasAtras);
 
-  // 6=Pregão Eletrônico, 8=Dispensa, 4=Concorrência Eletrônica
+  const fmt = d => d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  const dataFinal = fmt(hoje);
+  const dataInicial = fmt(inicio);
+
+  // 6=Pregão Eletrônico, 8=Dispensa, 4=Concorrência Eletrônica, 1=Leilão
   const modalidades = [6, 8, 4];
   let todos = [];
 
-  // ── ETAPA 1: PROPOSTAS EM ABERTO ──
-  // Endpoint /contratacoes/proposta retorna apenas editais recebendo propostas agora.
-  // dataFinal = hoje → traz tudo que ainda está com prazo aberto.
   for (const mod of modalidades) {
     let pagina = 1;
     let totalPaginas = 1;
-    while (pagina <= totalPaginas && pagina <= 6) {
-      let url = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataHoje}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
+
+    while (pagina <= totalPaginas && pagina <= 5) {
+      let url = `${PNCP_BASE}/contratacoes/publicacao?dataInicial=${dataInicial}&dataFinal=${dataFinal}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
       if (uf) url += `&uf=${uf}`;
+
       try {
         const json = await fetchPNCP(url);
         totalPaginas = json.totalPaginas || 1;
-        todos = todos.concat(json.data || []);
+        const itens = json.data || [];
+        todos = todos.concat(itens);
         pagina++;
       } catch(e) {
-        console.error('Erro proposta-aberta modalidade', mod, e);
-        break;
-      }
-    }
-  }
-
-  // ── ETAPA 2: PROPOSTAS QUE AINDA VÃO ABRIR (FUTURAS) ──
-  // O endpoint /proposta não traz futuros, então buscamos publicações recentes
-  // (últimos 30 dias) e filtramos as que têm dataAberturaProposta no futuro.
-  const inicioPub = new Date();
-  inicioPub.setDate(hoje.getDate() - 30);
-  const dataInicialPub = _fmtDataPNCP(inicioPub);
-  // dataFinal um pouco no futuro para pegar editais publicados que abrirão em breve
-  const fimPub = new Date();
-  fimPub.setDate(hoje.getDate() + diasFuturos);
-  const dataFinalPub = _fmtDataPNCP(fimPub);
-
-  for (const mod of modalidades) {
-    let pagina = 1;
-    let totalPaginas = 1;
-    while (pagina <= totalPaginas && pagina <= 4) {
-      let url = `${PNCP_BASE}/contratacoes/publicacao?dataInicial=${dataInicialPub}&dataFinal=${dataFinalPub}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
-      if (uf) url += `&uf=${uf}`;
-      try {
-        const json = await fetchPNCP(url);
-        totalPaginas = json.totalPaginas || 1;
-        todos = todos.concat(json.data || []);
-        pagina++;
-      } catch(e) {
-        console.error('Erro publicacao-futura modalidade', mod, e);
+        console.error('Erro modalidade', mod, e);
         break;
       }
     }
@@ -1215,26 +1055,17 @@ async function buscarEditaisPNCP(uf, diasFuturos = 45) {
     if (!vistos.has(id)) { vistos.add(id); unicos.push(e); }
   }
 
-  // Calcular status e DESCARTAR encerrados (foco: só aberto + futuro)
-  const resultado = [];
-  for (const e of unicos) {
-    const status = _statusEdital(e);
-    if (status === 'encerrado') continue; // ignora propostas já encerradas
-    e._status = status;
-    resultado.push(e);
-  }
-
-  return resultado;
+  return unicos;
 }
 
 function formatarEdital(edital) {
   const valor = edital.valorTotalEstimado
     ? 'R$ ' + Number(edital.valorTotalEstimado).toLocaleString('pt-BR', {minimumFractionDigits:2})
     : 'Não informado';
-  const aberturaDate = edital.dataAberturaProposta ? new Date(edital.dataAberturaProposta) : null;
-  const encerrDate = edital.dataEncerramentoProposta ? new Date(edital.dataEncerramentoProposta) : null;
-  const abertura = aberturaDate ? aberturaDate.toLocaleDateString('pt-BR') : '—';
-  const encerramento = encerrDate ? encerrDate.toLocaleDateString('pt-BR') : '—';
+  const abertura = edital.dataAberturaProposta
+    ? new Date(edital.dataAberturaProposta).toLocaleDateString('pt-BR') : '—';
+  const encerramento = edital.dataEncerramentoProposta
+    ? new Date(edital.dataEncerramentoProposta).toLocaleDateString('pt-BR') : '—';
   const modalidade = edital.modalidadeNome || '—';
   const orgao = edital.unidadeOrgao?.nomeUnidade || edital.orgaoEntidade?.razaoSocial || '—';
   const uf = edital.unidadeOrgao?.ufSigla || '—';
@@ -1242,35 +1073,8 @@ function formatarEdital(edital) {
   const link = edital.linkSistemaOrigem || edital.linkProcessoEletronico || '#';
   const numero = edital.numeroControlePNCP || '—';
 
-  // ── BADGE DE STATUS ──
-  const status = edital._status || _statusEdital(edital);
-  const agora = new Date();
-  const msDia = 1000 * 60 * 60 * 24;
-  let badge = '';
-
-  if (status === 'aberto') {
-    let txt = '✅ Proposta aberta';
-    if (encerrDate) {
-      const diasRest = Math.ceil((encerrDate - agora) / msDia);
-      if (diasRest <= 0) txt = '✅ Encerra hoje';
-      else if (diasRest === 1) txt = '✅ Aberta · encerra amanhã';
-      else txt = `✅ Aberta · ${diasRest} dias p/ encerrar`;
-    }
-    badge = `<span style="display:inline-block;background:#1f9d55;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">${txt}</span>`;
-  } else if (status === 'futuro') {
-    let txt = '⏳ Vai abrir';
-    if (aberturaDate) {
-      const diasAte = Math.ceil((aberturaDate - agora) / msDia);
-      if (diasAte <= 0) txt = '⏳ Abre hoje';
-      else if (diasAte === 1) txt = '⏳ Abre amanhã';
-      else txt = `⏳ Abre em ${diasAte} dias`;
-    }
-    badge = `<span style="display:inline-block;background:#d4860b;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">${txt}</span>`;
-  }
-
   return `
     <div style="background:#f0f9fb;border:1px solid #b8e0ea;border-radius:10px;padding:12px 14px;margin-top:10px;font-size:13px;">
-      ${badge}
       <div style="font-weight:700;color:#1a5f6e;margin-bottom:8px;font-size:13px;line-height:1.4;">${edital.objetoCompra || 'Sem descrição'}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-bottom:8px;color:#2a4a50;">
         <div><b>Valor:</b><br>${valor}</div>
@@ -1283,27 +1087,6 @@ function formatarEdital(edital) {
       </div>
       ${link !== '#' ? `<a href="${link}" target="_blank" style="display:inline-block;background:#1a5f6e;color:white;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">Acessar edital ↗</a>` : '<span style="color:#888;font-size:12px">Link não disponível</span>'}
     </div>`;
-}
-
-// Ordena: abertos primeiro (quem encerra antes no topo), depois futuros (quem abre antes no topo)
-function ordenarPorUrgencia(editais) {
-  return editais.slice().sort((a, b) => {
-    const sa = a._status || _statusEdital(a);
-    const sb = b._status || _statusEdital(b);
-    // abertos antes de futuros
-    if (sa !== sb) return sa === 'aberto' ? -1 : 1;
-    if (sa === 'aberto') {
-      // encerra antes = mais urgente = topo
-      const ea = a.dataEncerramentoProposta ? new Date(a.dataEncerramentoProposta).getTime() : Infinity;
-      const eb = b.dataEncerramentoProposta ? new Date(b.dataEncerramentoProposta).getTime() : Infinity;
-      return ea - eb;
-    } else {
-      // futuros: abre antes = topo
-      const aa = a.dataAberturaProposta ? new Date(a.dataAberturaProposta).getTime() : Infinity;
-      const ab = b.dataAberturaProposta ? new Date(b.dataAberturaProposta).getTime() : Infinity;
-      return aa - ab;
-    }
-  });
 }
 
 // Detecta UF no comando — sigla, nome completo ou sigla isolada
@@ -1652,32 +1435,44 @@ async function executarBuscaEditais(comando) {
     ufDetectada = _ultimaUF; // herda UF da busca anterior
   }
 
+  // Detectar período — se não informado, herdar
+  let dias = 0;
+  const c = comando.toLowerCase();
+  if (c.includes('hoje') || c.includes('24h')) dias = 2;
+  else if (c.includes('semana') || c.includes('7 dias') || c.includes('sete dias')) dias = 7;
+  else if (c.includes('15 dias') || c.includes('quinze')) dias = 15;
+  else if (c.includes('60 dias') || c.includes('2 meses') || c.includes('sessenta')) dias = 60;
+  else if (c.includes('90 dias') || c.includes('3 meses') || c.includes('noventa') || c.includes('trimestre')) dias = 90;
+  else if (c.includes('30 dias') || c.includes('trinta') || c.includes('mes') || c.includes('mês')) dias = 30;
+
+  // Se não detectou período, herdar do contexto anterior
+  if (!dias) dias = (_ultimoContexto === 'busca' && _ultimosDias) ? _ultimosDias : 30;
+
   // Salvar contexto atual
   _ultimoContexto = 'busca';
   _ultimaUF = ufDetectada;
+  _ultimosDias = dias;
 
   const container = document.getElementById('chat-messages');
 
   const etapas = [
     { texto: 'Analisando pedido...', duracao: 800 },
     { texto: `Acessando portal PNCP${ufDetectada ? ' · ' + ufDetectada : ' · Todo o Brasil'}`, duracao: 1000 },
-    { texto: 'Buscando propostas abertas e que vão abrir...', duracao: 900 },
+    { texto: `Filtrando editais de VRF — últimos ${dias} dias`, duracao: 900 },
     { texto: 'Processando modalidades de contratação...', duracao: 800 },
   ];
 
   await mostrarThinkingStream(container, etapas);
 
   try {
-    const editais = await buscarEditaisPNCP(ufDetectada);
+    const editais = await buscarEditaisPNCP(dias, ufDetectada);
     if (editais.length === 0) {
-      addMessage('assistant', `Nenhum edital de VRF com proposta aberta ou prevista${ufDetectada ? ' em ' + ufDetectada : ' no Brasil'} no momento. Tente novamente mais tarde ou remova o filtro de estado.`);
+      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ' em todo o Brasil'}. Tente ampliar o período ou remover o filtro de estado.`);
       return true;
     }
-    const ordenados = ordenarPorUrgencia(editais);
-    const abertos = ordenados.filter(e => (e._status || _statusEdital(e)) === 'aberto');
-    const futuros = ordenados.filter(e => (e._status || _statusEdital(e)) === 'futuro');
-    const top = ordenados.slice(0, 20);
-    let out = `<strong>📋 ${editais.length} edital(is) VRF — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
+    editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
+    const top = editais.slice(0, 15);
+    let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
     for (const e of top) out += formatarEdital(e);
     addMessage('assistant', out, true);
   } catch(err) {
@@ -1691,7 +1486,7 @@ async function executarBuscaEditais(comando) {
 async function interpretarIntencao(texto) {
   // System prompt focado APENAS em decidir se é busca de edital
   const ctxMsg = _ultimoContexto === 'busca'
-    ? ` Contexto: o usuário acabou de buscar editais de VRF${_ultimaUF ? ' em ' + _ultimaUF : ' no Brasil'}.`
+    ? ` Contexto: o usuário estava buscando editais de VRF${_ultimaUF ? ' em ' + _ultimaUF : ''}${_ultimosDias ? ' nos últimos ' + _ultimosDias + ' dias' : ''}.`
     : '';
 
   const prompt = `Você é um classificador de intenção. Analise a mensagem e responda SOMENTE com JSON válido, sem texto extra, sem markdown.${ctxMsg}
@@ -1699,31 +1494,33 @@ async function interpretarIntencao(texto) {
 Mensagem do usuário: "${texto.replace(/"/g, "'")}"
 
 Regras:
-- "ehBusca": true se o usuário quer buscar/pesquisar/encontrar/ver editais, licitações, processos, propostas ou contratos de VRF/ar condicionado/climatização/refrigeração (inclui pedidos como "tem licitação aberta?", "quais editais estão abertos?", "me mostra editais")
-- "ehBusca": false se é pergunta técnica, dúvida, pedido de explicação, qualificação, documentação, análise de PDF, ou outro assunto
-- Se houver estado/UF brasileiro, coloque a sigla em "uf" (ex: "GO", "SP", "BA"); senão deixe "" (busca nacional)
-- Considere o contexto: se o usuário estava buscando e pede "agora em GO" ou "e em SP?", é continuação da busca
+- "ehBusca": true se o usuário quer buscar/pesquisar/encontrar editais, licitações, processos, obras ou contratos de VRF/ar condicionado/climatização
+- "ehBusca": false se é pergunta técnica, dúvida, pedido de explicação, qualificação, documentação, ou qualquer outro assunto
+- Se houver estado/UF brasileiro, coloque a sigla em "uf" (ex: "GO", "SP", "BA")
+- Se houver período em dias, coloque em "dias" (padrão: 30)
+- Considere o contexto: se o usuário estava buscando e pede "agora em GO" ou "nos últimos 60 dias", é continuação da busca
 
-Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou ""}`;
+Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou "", "dias": N}`;
 
   try {
-    if (!hasApiKey()) throw new Error('no-key');
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: getApiHeaders(),
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 60,
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const data = await callAnthropicAPI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 60,
+      messages: [{ role: 'user', content: prompt }]
     });
-    const data = await res.json();
     const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(raw);
 
-    // Se é busca, herdar UF do contexto anterior quando não especificada
+    // Se é busca, herdar contexto anterior para campos não especificados
     if (parsed.ehBusca) {
       if (!parsed.uf && _ultimoContexto === 'busca' && _ultimaUF) parsed.uf = _ultimaUF;
+      if ((!parsed.dias || parsed.dias === 30) && _ultimoContexto === 'busca' && _ultimosDias && _ultimosDias !== 30) {
+        parsed.dias = _ultimosDias;
+      }
+      // Extrair dias explicitamente se mencionado
+      const m = texto.match(/(\d+)\s*dias?/i);
+      if (m) parsed.dias = parseInt(m[1]);
+      if (!parsed.dias) parsed.dias = _ultimosDias || 30;
     }
     return parsed;
 
@@ -1732,12 +1529,12 @@ Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou ""}`;
     // Só usa busca se tiver palavras bem claras
     const t = texto.toLowerCase();
     const palavrasBusca = ['buscar', 'busca', 'pesquisar', 'pesquisa', 'procurar', 'encontrar',
-      'editais', 'licitações', 'licitacoes', 'tem licitação', 'tem edital', 'me manda', 'me mostre',
-      'proposta aberta', 'propostas abertas', 'em aberto'];
+      'editais', 'licitações', 'licitacoes', 'tem licitação', 'tem edital', 'me manda', 'me mostre'];
     const ehBusca = palavrasBusca.some(p => t.includes(p));
     return {
       ehBusca,
-      uf: detectarUF(texto) || (_ultimoContexto === 'busca' && ehBusca ? _ultimaUF : '')
+      uf: detectarUF(texto) || (_ultimoContexto === 'busca' && ehBusca ? _ultimaUF : ''),
+      dias: _ultimosDias || 30
     };
   }
 }
@@ -1745,10 +1542,7 @@ Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou ""}`;
 
 // ── BUSCA COM INTENÇÃO INTERPRETADA PELA IA ──
 async function executarBuscaEditaisInteligente(intencao) {
-  const ufDetectada = intencao.uf || '';
-  // Salvar contexto para continuações
-  _ultimoContexto = 'busca';
-  _ultimaUF = ufDetectada;
+  const { uf: ufDetectada, dias } = intencao;
   const container = document.getElementById('chat-messages');
 
   // Thinking stream — fica ativo até o resultado chegar de verdade
@@ -1781,13 +1575,13 @@ async function executarBuscaEditaisInteligente(intencao) {
   await setMsg(`Acessando portal PNCP${ufDetectada ? ' · ' + ufDetectada : ' · Todo o Brasil'}`);
   await new Promise(r => setTimeout(r, 800));
 
-  await setMsg('Buscando propostas abertas e que vão abrir...');
+  await setMsg(`Filtrando editais de VRF — últimos ${dias} dias`);
   // NÃO esperar tempo fixo aqui — a busca começa agora e o stream fica ativo
 
   try {
-    // Buscar SÓ editais com proposta aberta + os que ainda vão abrir
+    // Iniciar busca real enquanto stream está ativo
     const [editais] = await Promise.all([
-      buscarEditaisPNCP(ufDetectada),
+      buscarEditaisPNCP(dias, ufDetectada),
       new Promise(r => setTimeout(r, 600)) // mínimo de tempo nesta etapa
     ]);
 
@@ -1801,21 +1595,14 @@ async function executarBuscaEditaisInteligente(intencao) {
     wrap.remove();
 
     if (editais.length === 0) {
-      addMessage('assistant', `Nenhum edital de VRF com proposta aberta ou prevista${ufDetectada ? ' em ' + ufDetectada : ' no Brasil'} no momento. Tente novamente mais tarde ou remova o filtro de estado.`);
+      addMessage('assistant', `Nenhum edital de VRF encontrado nos últimos ${dias} dias${ufDetectada ? ' em ' + ufDetectada : ' em todo o Brasil'}. Tente ampliar o período ou remover o filtro de estado.`);
       return;
     }
 
-    // Ordenar por urgência: abertos primeiro (quem encerra antes no topo), depois futuros (quem abre antes)
-    const ordenados = ordenarPorUrgencia(editais);
-    const abertos = ordenados.filter(e => (e._status || _statusEdital(e)) === 'aberto');
-    const futuros = ordenados.filter(e => (e._status || _statusEdital(e)) === 'futuro');
-    const top = ordenados.slice(0, 20);
-
-    let out = `<strong>📋 ${editais.length} edital(is) VRF — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
+    editais.sort((a, b) => (b.valorTotalEstimado || 0) - (a.valorTotalEstimado || 0));
+    const top = editais.slice(0, 15);
+    let out = `<strong>✅ ${editais.length} edital(is) VRF encontrado(s) — exibindo ${top.length}:</strong>`;
     for (const e of top) out += formatarEdital(e);
-    if (editais.length > top.length) {
-      out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${editais.length}.</div>`;
-    }
     addMessage('assistant', out, true);
 
   } catch(err) {
@@ -1938,64 +1725,8 @@ function confirmVoice() {
   _transcript = '';
 }
 
-// ─── MODAL API KEY ───
-function abrirConfigApiKey() {
-  closeSidebar();
-  const saved = localStorage.getItem('elite_api_key') || '';
-  document.getElementById('modal-apikey-input').value = saved;
-  document.getElementById('apikey-modal').classList.add('open');
-}
-
-function fecharConfigApiKey() {
-  document.getElementById('apikey-modal').classList.remove('open');
-}
-
-function salvarApiKey() {
-  const key = document.getElementById('modal-apikey-input').value.trim();
-  if (key) {
-    localStorage.setItem('elite_api_key', key);
-    atualizarStatusApiKey();
-    addMessage('assistant', '✅ <strong>API key salva!</strong> Agora você pode usar o chat com IA normalmente.', true);
-  } else {
-    localStorage.removeItem('elite_api_key');
-    atualizarStatusApiKey();
-    addMessage('assistant', '⚠️ API key removida. O chat com IA não funcionará sem ela.');
-  }
-  fecharConfigApiKey();
-}
-
-function atualizarStatusApiKey() {
-  const el = document.getElementById('sidebar-apikey-status');
-  if (!el) return;
-  el.textContent = hasApiKey() ? '✓ ativa' : '✗ ausente';
-  el.style.color = hasApiKey() ? '#3ab5cc' : 'rgba(255,100,100,0.7)';
-}
-
-// ─── INICIALIZAÇÃO DA PÁGINA ───
-(function() {
-  // Pré-preencher API key salva na tela de login
-  const savedKey = localStorage.getItem('elite_api_key') || '';
-  const loginApiKey = document.getElementById('login-apikey');
-  if (loginApiKey && savedKey) loginApiKey.value = savedKey;
-  // Atualizar status na sidebar após render
-  setTimeout(atualizarStatusApiKey, 100);
-})();
 
 </script>
-
-<!-- Modal API Key -->
-<div id="apikey-modal">
-  <div class="apikey-modal-card">
-    <h3>🔑 Chave API Anthropic</h3>
-    <p>Necessária para o chat com IA. Obtenha em <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--teal-glow)">console.anthropic.com</a><br>
-    A chave é salva localmente neste dispositivo.</p>
-    <input type="password" id="modal-apikey-input" placeholder="sk-ant-..." autocomplete="off"/>
-    <div class="apikey-modal-actions">
-      <button class="btn-modal-cancel" onclick="fecharConfigApiKey()">Cancelar</button>
-      <button class="btn-modal-save" onclick="salvarApiKey()">Salvar</button>
-    </div>
-  </div>
-</div>
 
 <!-- Overlay de microfone estilo Claude -->
 <div id="mic-overlay">
