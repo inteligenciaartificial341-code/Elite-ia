@@ -926,6 +926,56 @@
   }
   .cot-actions { display: flex; gap: 8px; margin-top: 14px; }
 
+
+/* ====== CSS adicional Agente de Cotação ====== */
+/* ═══════════ AGENTE DE COTAÇÃO VRF + PREÇOS MULTI-LOJA ═══════════ */
+.mat-loja { font-size:10px; font-weight:600; color:var(--teal-glow); opacity:.85; margin-left:4px; }
+.mat-lojas { display:flex; gap:5px; margin-top:5px; flex-wrap:wrap; }
+.mat-lojas span { font-size:10px; padding:2px 6px; border-radius:6px; background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.4); border:1px solid rgba(255,255,255,0.07); }
+.mat-lojas span.on { color:var(--teal-glow); background:rgba(58,181,204,0.10); border-color:rgba(58,181,204,0.25); }
+.mat-form-lojas-label { font-size:11px; font-weight:600; letter-spacing:.4px; color:var(--teal-glow); text-transform:uppercase; margin:10px 0 6px; opacity:.85; }
+.row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+
+/* PDF row + status */
+.cot-pdf-row { display:flex; gap:8px; margin:12px 0 4px; flex-wrap:wrap; }
+.cot-pdf-row .btn-panel { flex:1; min-width:140px; }
+.cot-ok { background:rgba(58,181,204,0.10); border:1px solid rgba(58,181,204,0.25); color:#bfeaf2; font-size:13px; padding:10px 12px; border-radius:10px; margin:8px 0; }
+.cot-err { background:rgba(255,140,90,0.10); border:1px solid rgba(255,140,90,0.3); color:#ffd0b8; font-size:13px; padding:10px 12px; border-radius:10px; margin:8px 0; }
+
+/* Seções do formulário */
+.cot-sec { background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.07); border-radius:14px; padding:14px; margin:12px 0; }
+.cot-sec-h { font-size:13px; font-weight:700; color:var(--teal-glow); margin-bottom:10px; letter-spacing:.3px; }
+.cot-mini { font-size:11px; color:rgba(255,255,255,0.45); margin-top:8px; line-height:1.4; }
+
+/* Grid de bitolas */
+.bt-head { display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:8px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:rgba(255,255,255,0.4); padding:0 2px 6px; }
+.bt-grid { display:flex; flex-direction:column; gap:6px; }
+.bt-row { display:grid; grid-template-columns:1.1fr 1fr 1fr; gap:8px; align-items:center; }
+.bt-label { font-size:13px; font-weight:600; color:var(--white); }
+.bt-label span { font-size:10px; color:rgba(255,255,255,0.4); font-weight:400; }
+.bt-in { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:9px; padding:9px 10px; color:var(--white); font-size:14px; font-family:'Inter',sans-serif; outline:none; width:100%; transition:border-color .15s; }
+.bt-in:focus { border-color:var(--teal-glow); }
+.bt-in.jt { background:rgba(255,255,255,0.03); }
+
+/* Campos rotulados */
+.fld { display:flex; flex-direction:column; gap:5px; }
+.fld label { font-size:11px; font-weight:600; color:rgba(255,255,255,0.55); letter-spacing:.2px; }
+.fld input { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:9px; padding:10px 11px; color:var(--white); font-size:14px; font-family:'Inter',sans-serif; outline:none; transition:border-color .15s; }
+.fld input:focus { border-color:var(--teal-glow); }
+
+/* Tabela de resultado — grupos / loja / venda */
+.cot-table .cot-grp td { background:rgba(58,181,204,0.10); color:var(--teal-glow); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.4px; padding:7px 10px; }
+.loja-tag { font-size:11px; padding:2px 7px; border-radius:6px; background:rgba(58,181,204,0.12); color:var(--teal-glow); white-space:nowrap; }
+.loja-tag.man { background:rgba(212,175,55,0.14); color:#e8c970; }
+.cot-table tfoot .tf-venda td { color:#fff; background:rgba(58,181,204,0.18); font-size:14px; }
+.cot-nota { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.7); font-size:12px; padding:9px 12px; border-radius:10px; margin-top:10px; line-height:1.45; }
+
+@media print {
+  .sidebar, .panel-back, .cot-actions, .cot-pdf-row, #voice-fab, .panel-toolbar { display:none !important; }
+  .panel-full { position:static !important; background:#fff !important; color:#000 !important; }
+  .cot-table { color:#000; }
+}
+
 </style>
 </head>
 <body>
@@ -2477,48 +2527,75 @@ function _vcFalar(texto, onEnd) {
 //  PREÇOS DE MATERIAIS  +  AGENTE DE COTAÇÃO VRF
 // ═══════════════════════════════════════════════════
 
-const PRECOS_KEY = 'elite_precos_materiais';
-const MARGEM = 1.30; // 30% fixo
+// ════════════════════════════════════════════════════════════════════════
+//  AGENTE DE COTAÇÃO VRF — MOTOR + PREÇOS (multi-loja) + UI   |  Elite IA
+//  Lógica de cálculo de materiais validada contra casos reais (Paulo).
+// ════════════════════════════════════════════════════════════════════════
+const PRECOS_KEY = 'elite_precos_materiais_v2';
+const MARGEM = 1.30; // 30% fixo (confirmado)
 
-// BOM padrão Elite Ar (custo 0 = a preencher)
-const BOM_PADRAO = [
-  // Tubulação de cobre por diâmetro
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1/4"',   unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 3/8"',   unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1/2"',   unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 5/8"',   unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 3/4"',   unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 7/8"',   unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1"',     unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.1/4"', unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.1/2"', unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.5/8"', unidade:'m', custo:0 },
-  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.3/4"', unidade:'m', custo:0 },
-  // Isolamento térmico
-  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 1/4"', unidade:'m', custo:0 },
-  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 3/8"', unidade:'m', custo:0 },
-  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 1/2"', unidade:'m', custo:0 },
-  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 5/8"', unidade:'m', custo:0 },
-  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 3/4"', unidade:'m', custo:0 },
-  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 7/8"', unidade:'m', custo:0 },
-  // Materiais auxiliares
-  { grupo:'Materiais Auxiliares', nome:'Adesivo / cola PVC',  unidade:'un',   custo:0 },
-  { grupo:'Materiais Auxiliares', nome:'Fita PVC (rolo)',     unidade:'rolo', custo:0 },
-  { grupo:'Materiais Auxiliares', nome:'Fita de alumínio',    unidade:'rolo', custo:0 },
-  { grupo:'Materiais Auxiliares', nome:'Massa de calafetar',  unidade:'un',   custo:0 },
-  // Infraestrutura
-  { grupo:'Infraestrutura', nome:'Eletrocalha perfurada',     unidade:'m',  custo:0 },
-  { grupo:'Infraestrutura', nome:'Perfilado',                 unidade:'m',  custo:0 },
-  { grupo:'Infraestrutura', nome:'Abraçadeira / suporte',     unidade:'un', custo:0 },
-  { grupo:'Infraestrutura', nome:'Mão francesa / suporte condensadora', unidade:'un', custo:0 },
-  // Dreno
-  { grupo:'Drenagem', nome:'Tubo PVC dreno 25mm', unidade:'m',  custo:0 },
-  { grupo:'Drenagem', nome:'Tubo PVC dreno 32mm', unidade:'m',  custo:0 },
-  { grupo:'Drenagem', nome:'Conexões PVC dreno',  unidade:'un', custo:0 },
-];
+// Bitolas usadas no formulário (ordem flex → rígido)
+const BITOLAS = ['3/8','1/2','5/8','3/4','7/8','1','1.1/4','1.1/2','1.5/8','1.3/4'];
+const BITOLAS_FLEX = ['3/8','1/2','5/8','3/4','7/8'];
 
-function _uid(){ return 'm' + Date.now().toString(36) + Math.random().toString(36).substr(2,4); }
+// Fatores de consumo de SOLDA FOSCOPER (vareta por junta), por bitola
+const FATOR_FOSCOPER = {
+  '3/8':0.10, '1/2':0.10, '5/8':0.10, '3/4':0.125, '7/8':0.15,
+  '1':0.20, '1.1/4':0.33, '1.1/2':1.00, '1.5/8':1.00, '1.3/4':1.00
+};
+// bitolas cujo fator ainda é provisório (confirmar tabela real)
+const FOSCOPER_PROV = ['5/8','7/8','1.5/8','1.3/4'];
+
+// Constantes de obra (regras do Paulo)
+const CC = {
+  PERF_CORTE_CM:15, PERF_INTERVALO_M:1.20, PERF_BARRA_M:6,
+  ROSC_TUB_POR_PERF:2, ROSC_TUB_M:0.30, ROSC_EVAP_POR_EVAP:4, ROSC_EVAP_M:0.50,
+  ROSC_BARRA_M:3, PORCA_POR_BARRA:3, ARRUELA_POR_BARRA:3,
+  ISOL_BARRA_M:2, COLA_REND_M:75, FITA_ALU:3, FITA_TAPE:3
+};
+
+function _teto(x){ return Math.ceil(x - 1e-9); }
+function _uid(){ return 'm'+Date.now().toString(36)+Math.random().toString(36).substr(2,4); }
 function fmtBR(n){ return Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _numIn(id){ const el=document.getElementById(id); if(!el) return 0; return parseFloat(String(el.value).replace(',','.'))||0; }
+
+// ── BOM com preços REAIS por loja (Planilha de Composição REV04) ──
+// p = { cli, duf, fri } preços por loja (0 = sem cotação) | med = média (fallback)
+// chave = identificador fixo p/ o motor cruzar quantidade × preço
+function _cobreFlex(b){ return { chave:'cob_f_'+b, grupo:'Tubulação de Cobre', nome:'Cobre flexível '+b+'"', unidade:'m', cli:97, duf:110, fri:105, med:104 }; }
+function _cobreRig(b){  return { chave:'cob_r_'+b, grupo:'Tubulação de Cobre', nome:'Cobre rígido '+b+'"',   unidade:'m', cli:107,duf:120, fri:115, med:114 }; }
+function _isol(b,cli,duf,fri,med){ return { chave:'iso_'+b, grupo:'Isolamento Elastomérico', nome:'Isolamento elast. '+b+'"', unidade:'br 2m', cli:cli,duf:duf,fri:fri,med:med }; }
+
+const BOM_PADRAO = [
+  // ── Tubulação de cobre (preço igual por tipo, conforme planilha) ──
+  _cobreFlex('1/4'), _cobreFlex('3/8'), _cobreFlex('1/2'), _cobreFlex('5/8'), _cobreFlex('3/4'), _cobreFlex('7/8'),
+  _cobreRig('1'), _cobreRig('1.1/8'), _cobreRig('1.1/4'), _cobreRig('1.3/8'), _cobreRig('1.1/2'), _cobreRig('1.5/8'), _cobreRig('1.3/4'),
+  // ── Isolamento elastomérico (preço varia por bitola — valores reais) ──
+  _isol('1/4',20,15,25,20.32), _isol('3/8',0,15,40,22.18), _isol('1/2',0,16,45,25.17),
+  _isol('5/8',30,18,48,27.56), _isol('3/4',0,0,0,21.17), _isol('7/8',30,22,55,30.71),
+  _isol('1',0,0,0,14.52), _isol('1.1/8',40,25,40,31.56), _isol('1.1/4',0,0,0,34.00),
+  _isol('1.3/8',0,0,0,30.74), _isol('1.1/2',50,35,51,39.45), _isol('1.5/8',0,40,60,44.76), _isol('1.3/4',0,0,0,24.62),
+  // ── Suportes e fixação ──
+  { chave:'perfilado',   grupo:'Suportes e Fixação', nome:'Perfilado 38x38 (barra 6m)',  unidade:'barra', cli:0,duf:0,fri:0,med:0 },
+  { chave:'barra_rosc',  grupo:'Suportes e Fixação', nome:'Barra roscada 1/4" (3m)',     unidade:'barra', cli:0,duf:0,fri:0,med:0 },
+  { chave:'parabolt',    grupo:'Suportes e Fixação', nome:'Kit parabolt 1/4"',           unidade:'un',    cli:0,duf:0,fri:0,med:0 },
+  { chave:'porca',       grupo:'Suportes e Fixação', nome:'Porca 1/4"',                  unidade:'un',    cli:0,duf:0,fri:0,med:0 },
+  { chave:'arruela',     grupo:'Suportes e Fixação', nome:'Arruela 1/4"',                unidade:'un',    cli:0,duf:0,fri:0,med:0 },
+  { chave:'suporte_cond',grupo:'Suportes e Fixação', nome:'Suporte condensadora',        unidade:'un',    cli:61.56,duf:93.60,fri:38,med:71.06 },
+  { chave:'eletrocalha', grupo:'Suportes e Fixação', nome:'Eletrocalha 100x100 (3m)',    unidade:'un',    cli:72,duf:0,fri:0,med:72 },
+  // ── Solda e consumíveis ──
+  { chave:'foscoper',    grupo:'Solda e Consumíveis', nome:'Vareta foscoper 2,5mm',      unidade:'vareta',cli:0,duf:0,fri:0,med:0 },
+  { chave:'cola',        grupo:'Solda e Consumíveis', nome:'Cola de contato 750ml',      unidade:'lata',  cli:0,duf:0,fri:0,med:0 },
+  { chave:'fita_alu',    grupo:'Solda e Consumíveis', nome:'Fita aluminizada',           unidade:'rolo',  cli:0,duf:0,fri:0,med:0 },
+  { chave:'fita_tape',   grupo:'Solda e Consumíveis', nome:'Fita tape preta 10m',        unidade:'rolo',  cli:2.60,duf:3.20,fri:3.38,med:3.06 },
+  // ── Drenagem ──
+  { chave:'pvc_dreno',   grupo:'Drenagem', nome:'Tubo PVC dreno',     unidade:'m',  cli:0,duf:0,fri:0,med:0 },
+  { chave:'curva90',     grupo:'Drenagem', nome:'Curva 90° PVC dreno',unidade:'un', cli:0,duf:0,fri:0,med:0 },
+  { chave:'te_dreno',    grupo:'Drenagem', nome:'Tê PVC dreno',       unidade:'un', cli:0,duf:0,fri:0,med:0 },
+  // ── Gás e óleo ──
+  { chave:'gas_r410a',   grupo:'Gás e Óleo', nome:'Gás R-410A (cil. 11,4kg)', unidade:'cil', cli:0,duf:882.36,fri:1046.73,med:939.70 },
+  { chave:'oleo',        grupo:'Gás e Óleo', nome:'Óleo refrigeração',        unidade:'un',  cli:0,duf:0,fri:0,med:0 },
+];
 
 function carregarPrecos(){
   try { const r = JSON.parse(localStorage.getItem(PRECOS_KEY)||'null'); if(Array.isArray(r)&&r.length) return r; } catch(e){}
@@ -2531,44 +2608,116 @@ function _garantirBOM(){
   return p;
 }
 
-// ── PAINEL DE PREÇOS ──
+// menor preço entre as 3 lojas; fallback média
+function menorPreco(m){
+  const lojas = [['Climario',m.cli],['Dufrio',m.duf],['Frigelar',m.fri]]
+    .filter(([n,v]) => typeof v==='number' && v>0);
+  if(lojas.length===0){
+    if(typeof m.med==='number' && m.med>0) return { preco:m.med, loja:'Média' };
+    return null;
+  }
+  lojas.sort((a,b)=>a[1]-b[1]);
+  return { preco:lojas[0][1], loja:lojas[0][0] };
+}
+function _itemPorChave(chave){ return _garantirBOM().find(m => m.chave===chave) || null; }
+
+// ════════════════════════════════════════════════════════════════════════
+//  MOTOR DE CÁLCULO (9 regras) — validado 14/14 contra exemplo do Paulo
+// ════════════════════════════════════════════════════════════════════════
+function calcularQuantidades(input){
+  const metragem = input.metragem || {};
+  const juntas   = input.juntas || null;
+  const evaps    = input.evaporadoras || 0;
+  const metragemTotal = Object.values(metragem).reduce((a,b)=>a+(Number(b)||0),0);
+
+  // 1) Perfilado 38x38 — 1 corte de 15cm a cada 1,20m; barra 6m = 40 cortes
+  const perfPecas  = _teto(metragemTotal / CC.PERF_INTERVALO_M);
+  const cortesBarra= (CC.PERF_BARRA_M*100)/CC.PERF_CORTE_CM;
+  const perfBarras = _teto(perfPecas / cortesBarra);
+
+  // 2/3) Barra roscada 1/4"
+  const roscTubU  = perfPecas * CC.ROSC_TUB_POR_PERF;
+  const roscEvapU = evaps * CC.ROSC_EVAP_POR_EVAP;
+  const roscTotU  = roscTubU + roscEvapU;
+  const roscComp  = roscTubU*CC.ROSC_TUB_M + roscEvapU*CC.ROSC_EVAP_M;
+  const roscBarras= _teto(roscComp / CC.ROSC_BARRA_M);
+
+  // Parabolt (1 por barra roscada)
+  const parabolt = roscTotU;
+  // 4) Porca + arruela (3 cada por barra roscada)
+  const porca = roscTotU*CC.PORCA_POR_BARRA;
+  const arruela = roscTotU*CC.ARRUELA_POR_BARRA;
+
+  // 5) Isolamento por bitola (barra 2m)
+  const isol = {}; let isolTot=0;
+  for(const b of BITOLAS){ const m=Number(metragem[b])||0; if(m>0){ isol[b]=_teto(m/CC.ISOL_BARRA_M); isolTot+=isol[b]; } }
+
+  // 6) Cola de contato (1 lata / 75m)
+  const cola = metragemTotal>0 ? _teto(metragemTotal/CC.COLA_REND_M) : 0;
+
+  // 7) Foscoper (varetas; soma juntas×fator)
+  let foscRaw=0; const foscDet={}; const foscPend=[];
+  if(juntas){
+    for(const b of BITOLAS){
+      const n=Number(juntas[b])||0; if(n<=0) continue;
+      const f=FATOR_FOSCOPER[b]; if(f===undefined){ foscPend.push(b); continue; }
+      foscDet[b]=n*f; foscRaw+=n*f;
+    }
+  }
+  const foscVaretas = _teto(foscRaw);
+
+  return {
+    metragemTotal,
+    perfilado:{ pecas:perfPecas, barras:perfBarras },
+    barraRosc:{ unidades:roscTotU, comp:+roscComp.toFixed(2), barras:roscBarras },
+    parabolt, porca, arruela,
+    isol, isolTot,
+    cola,
+    foscoper:{ varetas:foscVaretas, raw:+foscRaw.toFixed(3), det:foscDet, pend:foscPend }
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  PAINEL DE PREÇOS (multi-loja)
+// ════════════════════════════════════════════════════════════════════════
 let _matEditId = null;
 
 function abrirPainelPrecos(){
-  _garantirBOM();
-  _matEditId = null;
-  document.getElementById('mat-form-container').innerHTML = '';
-  const pnl = document.getElementById('pricing-panel');
-  pnl.classList.toggle('desktop-mode', isDesktop);
-  pnl.classList.add('active');
+  _garantirBOM(); _matEditId=null;
+  document.getElementById('mat-form-container').innerHTML='';
+  const pnl=document.getElementById('pricing-panel');
+  pnl.classList.toggle('desktop-mode', isDesktop); pnl.classList.add('active');
   renderListaPrecos();
 }
 function fecharPainelPrecos(){
   document.getElementById('pricing-panel').classList.remove('active');
-  document.getElementById('mat-form-container').innerHTML = '';
-  _matEditId = null;
+  document.getElementById('mat-form-container').innerHTML=''; _matEditId=null;
 }
 
 function renderListaPrecos(){
-  const cont = document.getElementById('precos-lista');
-  const precos = _garantirBOM();
-  const grupos = {};
-  precos.forEach(m => { (grupos[m.grupo] = grupos[m.grupo] || []).push(m); });
+  const cont=document.getElementById('precos-lista');
+  const precos=_garantirBOM();
+  const grupos={}; precos.forEach(m=>{ (grupos[m.grupo]=grupos[m.grupo]||[]).push(m); });
 
-  let html = '';
-  Object.keys(grupos).forEach(g => {
-    html += `<div class="mat-group-label">${g}</div>`;
-    grupos[g].forEach(m => {
-      const custoTxt = m.custo > 0
-        ? `<div class="mat-custo">R$ ${fmtBR(m.custo)}</div>`
+  let html='';
+  Object.keys(grupos).forEach(g=>{
+    html+=`<div class="mat-group-label">${g}</div>`;
+    grupos[g].forEach(m=>{
+      const mp=menorPreco(m);
+      const precoTxt = mp
+        ? `<div class="mat-custo">R$ ${fmtBR(mp.preco)} <span class="mat-loja">${mp.loja}</span></div>`
         : `<div class="mat-custo vazio">⚠️ definir</div>`;
-      html += `
+      const lojinhas = `<div class="mat-lojas">`+
+        ['cli|Cli','duf|Duf','fri|Fri'].map(s=>{const[k,lbl]=s.split('|');const v=m[k];
+          return `<span class="${(typeof v==='number'&&v>0)?'on':''}">${lbl} ${(typeof v==='number'&&v>0)?fmtBR(v):'—'}</span>`;}).join('')+`</div>`;
+      html+=`
         <div class="mat-row">
           <div class="mat-info">
             <div class="mat-nome">${m.nome}</div>
             <div class="mat-sub">por ${m.unidade}</div>
+            ${lojinhas}
           </div>
-          ${custoTxt}
+          ${precoTxt}
           <div class="mat-actions">
             <button class="mat-btn" onclick="abrirFormMat('${m.id}')" title="Editar">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2580,228 +2729,297 @@ function renderListaPrecos(){
         </div>`;
     });
   });
-  cont.innerHTML = html;
+  cont.innerHTML=html;
 }
 
 function abrirFormMat(id){
-  _matEditId = id || null;
-  const precos = _garantirBOM();
-  const m = id ? precos.find(x => x.id === id) : null;
-  const grupos = [...new Set(precos.map(p => p.grupo))];
-  const grupoAtual = m ? m.grupo : (grupos[0] || 'Materiais Auxiliares');
+  _matEditId=id||null;
+  const precos=_garantirBOM();
+  const m=id?precos.find(x=>x.id===id):null;
+  const grupos=[...new Set(precos.map(p=>p.grupo))];
+  const grupoAtual=m?m.grupo:(grupos[0]||'Outros');
+  const v=(x)=> (typeof x==='number'&&x>0)?x:'';
 
-  const cont = document.getElementById('mat-form-container');
-  cont.innerHTML = `
+  const cont=document.getElementById('mat-form-container');
+  cont.innerHTML=`
     <div class="mat-form">
-      <h4>${m ? 'Editar material' : 'Novo material'}</h4>
-      <input type="text" id="mat-nome" placeholder="Nome do material" value="${m ? m.nome.replace(/"/g,'&quot;') : ''}">
-      <input list="mat-grupos" id="mat-grupo" placeholder="Grupo" value="${grupoAtual}">
-      <datalist id="mat-grupos">${grupos.map(g => `<option value="${g}">`).join('')}</datalist>
+      <h4>${m?'Editar material':'Novo material'}</h4>
+      <input type="text" id="mat-nome" placeholder="Nome do material" value="${m?m.nome.replace(/"/g,'&quot;'):''}">
       <div class="row2">
-        <input type="text" id="mat-unidade" placeholder="Unidade (m, un...)" value="${m ? m.unidade : ''}">
-        <input type="number" id="mat-custo" placeholder="Custo R$" inputmode="decimal" step="0.01" value="${m && m.custo ? m.custo : ''}">
+        <input list="mat-grupos" id="mat-grupo" placeholder="Grupo" value="${grupoAtual}">
+        <input type="text" id="mat-unidade" placeholder="Unidade" value="${m?m.unidade:''}">
       </div>
+      <datalist id="mat-grupos">${grupos.map(g=>`<option value="${g}">`).join('')}</datalist>
+      <div class="mat-form-lojas-label">Preço por loja (deixe vazio se não tiver)</div>
+      <div class="row3">
+        <input type="number" id="mat-cli" placeholder="Climario" inputmode="decimal" step="0.01" value="${m?v(m.cli):''}">
+        <input type="number" id="mat-duf" placeholder="Dufrio" inputmode="decimal" step="0.01" value="${m?v(m.duf):''}">
+        <input type="number" id="mat-fri" placeholder="Frigelar" inputmode="decimal" step="0.01" value="${m?v(m.fri):''}">
+      </div>
+      <input type="number" id="mat-med" placeholder="Média (fallback, opcional)" inputmode="decimal" step="0.01" value="${m?v(m.med):''}">
       <div class="mat-form-btns">
         <button class="btn-panel ghost" onclick="cancelarFormMat()">Cancelar</button>
         <button class="btn-panel primary" onclick="salvarMat()">Salvar</button>
       </div>
     </div>`;
-  cont.scrollIntoView({ behavior:'smooth', block:'start' });
-  setTimeout(() => document.getElementById('mat-nome')?.focus(), 200);
+  cont.scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>document.getElementById('mat-nome')?.focus(),200);
 }
-
-function cancelarFormMat(){
-  document.getElementById('mat-form-container').innerHTML = '';
-  _matEditId = null;
-}
+function cancelarFormMat(){ document.getElementById('mat-form-container').innerHTML=''; _matEditId=null; }
 
 function salvarMat(){
-  const nome = document.getElementById('mat-nome').value.trim();
-  const grupo = document.getElementById('mat-grupo').value.trim() || 'Outros';
-  const unidade = document.getElementById('mat-unidade').value.trim() || 'un';
-  const custo = parseFloat(String(document.getElementById('mat-custo').value).replace(',', '.')) || 0;
+  const nome=document.getElementById('mat-nome').value.trim();
+  const grupo=document.getElementById('mat-grupo').value.trim()||'Outros';
+  const unidade=document.getElementById('mat-unidade').value.trim()||'un';
+  const pn=(id)=>{ const x=parseFloat(String(document.getElementById(id).value).replace(',','.')); return isNaN(x)?0:x; };
   if(!nome){ alert('Informe o nome do material.'); return; }
-
-  const precos = _garantirBOM();
+  const precos=_garantirBOM();
   if(_matEditId){
-    const m = precos.find(x => x.id === _matEditId);
-    if(m){ m.nome = nome; m.grupo = grupo; m.unidade = unidade; m.custo = custo; }
+    const m=precos.find(x=>x.id===_matEditId);
+    if(m){ m.nome=nome;m.grupo=grupo;m.unidade=unidade;m.cli=pn('mat-cli');m.duf=pn('mat-duf');m.fri=pn('mat-fri');m.med=pn('mat-med'); }
   } else {
-    precos.push({ id:_uid(), grupo, nome, unidade, custo });
+    precos.push({ id:_uid(), chave:'custom_'+_uid(), grupo, nome, unidade, cli:pn('mat-cli'),duf:pn('mat-duf'),fri:pn('mat-fri'),med:pn('mat-med') });
   }
-  salvarPrecos(precos);
-  cancelarFormMat();
-  renderListaPrecos();
+  salvarPrecos(precos); cancelarFormMat(); renderListaPrecos();
 }
-
 function removerMat(id){
   if(!confirm('Excluir este material da tabela de preços?')) return;
-  const precos = _garantirBOM().filter(x => x.id !== id);
-  salvarPrecos(precos);
-  renderListaPrecos();
+  salvarPrecos(_garantirBOM().filter(x=>x.id!==id)); renderListaPrecos();
 }
-
 function resetarBOM(){
-  if(!confirm('Restaurar a lista padrão de materiais? Os preços que você cadastrou serão perdidos.')) return;
-  const novo = BOM_PADRAO.map(m => ({ id:_uid(), ...m }));
-  salvarPrecos(novo);
-  cancelarFormMat();
-  renderListaPrecos();
+  if(!confirm('Restaurar a lista padrão (com os preços de referência da planilha)? Os preços que você editou serão perdidos.')) return;
+  salvarPrecos(BOM_PADRAO.map(m=>({id:_uid(),...m}))); cancelarFormMat(); renderListaPrecos();
 }
 
-// ── AGENTE DE COTAÇÃO VRF ──
+// ════════════════════════════════════════════════════════════════════════
+//  AGENTE DE COTAÇÃO VRF — UI
+// ════════════════════════════════════════════════════════════════════════
 function abrirAgenteCotacao(){
   _garantirBOM();
-  const pnl = document.getElementById('cotacao-panel');
-  pnl.classList.toggle('desktop-mode', isDesktop);
-  pnl.classList.add('active');
+  const pnl=document.getElementById('cotacao-panel');
+  pnl.classList.toggle('desktop-mode', isDesktop); pnl.classList.add('active');
   resetCotacao();
 }
 function fecharAgenteCotacao(){ document.getElementById('cotacao-panel').classList.remove('active'); }
 
+function _gridBitolasHTML(){
+  return BITOLAS.map(b=>{
+    const tipo = BITOLAS_FLEX.includes(b)?'flex':'ríg';
+    return `<div class="bt-row">
+      <div class="bt-label">${b}" <span>${tipo}</span></div>
+      <input type="number" id="m_${b}" class="bt-in" inputmode="decimal" placeholder="metros" step="0.01">
+      <input type="number" id="j_${b}" class="bt-in jt" inputmode="numeric" placeholder="juntas" step="1">
+    </div>`;
+  }).join('');
+}
+
 function resetCotacao(){
-  document.getElementById('cot-intro').style.display = 'block';
-  document.getElementById('cot-result').innerHTML = '';
-  const t = document.getElementById('cot-texto'); if(t) t.value = '';
+  const wrap=document.getElementById('cot-body');
+  wrap.innerHTML=`
+    <div class="panel-hint">Preencha os campos (ou envie o PDF do edital para a Elite IA pré-preencher a metragem). O cálculo de materiais é <b>determinístico</b> e aplica margem de <b>30%</b>, escolhendo o <b>menor preço por loja</b>.</div>
+
+    <div class="cot-pdf-row">
+      <button class="btn-panel ghost" onclick="document.getElementById('cot-file-input').click()">📄 Pré-preencher pelo PDF</button>
+      <input type="file" id="cot-file-input" accept=".pdf" style="display:none" onchange="handleFileCotacao(this)"/>
+      <button class="btn-panel ghost" onclick="carregarExemploVarginha()">★ Exemplo Varginha</button>
+    </div>
+    <div id="cot-pdf-status"></div>
+
+    <div class="cot-sec">
+      <div class="cot-sec-h">1 · Tubulação por bitola</div>
+      <div class="bt-head"><span>Bitola</span><span>Metros</span><span>Juntas*</span></div>
+      <div class="bt-grid">${_gridBitolasHTML()}</div>
+      <div class="cot-mini">*Juntas = pontos de solda (~refinetes). Opcional; usado só para a vareta de foscoper.</div>
+    </div>
+
+    <div class="cot-sec">
+      <div class="cot-sec-h">2 · Equipamentos</div>
+      <div class="row2">
+        <div class="fld"><label>Evaporadoras</label><input type="number" id="cot-evap" inputmode="numeric" step="1" placeholder="ex: 21"></div>
+        <div class="fld"><label>Condensadoras</label><input type="number" id="cot-cond" inputmode="numeric" step="1" placeholder="ex: 3"></div>
+      </div>
+    </div>
+
+    <div class="cot-sec">
+      <div class="cot-sec-h">3 · Refinetes (Derivação Y)</div>
+      <div class="row2">
+        <div class="fld"><label>Quantidade</label><input type="number" id="cot-ref-qtd" inputmode="numeric" step="1" placeholder="ex: 22"></div>
+        <div class="fld"><label>Valor unit. (R$)</label><input type="number" id="cot-ref-val" inputmode="decimal" step="0.01" placeholder="ex: 180,00"></div>
+      </div>
+      <div class="cot-mini">Enquanto o DWG não chega, informe a quantidade e o valor; soma direto no total.</div>
+    </div>
+
+    <div class="cot-sec">
+      <div class="cot-sec-h">4 · Drenagem</div>
+      <div class="row3">
+        <div class="fld"><label>Tubo PVC (m)</label><input type="number" id="cot-dren-m" inputmode="decimal" step="0.01" placeholder="metros"></div>
+        <div class="fld"><label>Curva 90° (un)</label><input type="number" id="cot-dren-c" inputmode="numeric" step="1" placeholder="un"></div>
+        <div class="fld"><label>Tê (un)</label><input type="number" id="cot-dren-t" inputmode="numeric" step="1" placeholder="un"></div>
+      </div>
+      <div class="cot-mini">Preço puxado da tabela (cadastre em Preços de Materiais).</div>
+    </div>
+
+    <div class="cot-sec">
+      <div class="cot-sec-h">5 · Gás / Óleo (do fluxograma)</div>
+      <div class="row2">
+        <div class="fld"><label>Refrigerante — valor (R$)</label><input type="number" id="cot-gas-val" inputmode="decimal" step="0.01" placeholder="campo aberto"></div>
+        <div class="fld"><label>Óleo (un)</label><input type="number" id="cot-oleo" inputmode="numeric" step="1" placeholder="ex: 3"></div>
+      </div>
+    </div>
+
+    <button class="btn-panel primary" style="width:100%;margin-top:6px" onclick="calcularCotacao()">⚙️ Calcular orçamento</button>
+    <div id="cot-result" class="cot-result"></div>
+  `;
 }
 
 function _toBase64(file){
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(',')[1]);
-    r.onerror = () => rej(new Error('Erro ao ler arquivo'));
-    r.readAsDataURL(file);
-  });
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=()=>rej(new Error('Erro ao ler arquivo')); r.readAsDataURL(file); });
 }
-
 async function handleFileCotacao(input){
-  const file = input.files[0]; if(!file) return;
-  const base64 = await _toBase64(file);
-  input.value = '';
-  iniciarCotacao({ tipo:'pdf', base64, nome:file.name });
-}
-
-function cotarPorTexto(){
-  const t = document.getElementById('cot-texto').value.trim();
-  if(!t){ alert('Cole a lista de materiais ou um trecho do memorial primeiro.'); return; }
-  iniciarCotacao({ tipo:'texto', texto:t, nome:'Texto colado' });
-}
-
-async function iniciarCotacao(fonte){
-  const precos = _garantirBOM();
-  document.getElementById('cot-intro').style.display = 'none';
-  const res = document.getElementById('cot-result');
-  res.innerHTML = `<div class="cot-loading"><div class="cot-spinner"></div><div class="cl-txt">Lendo o edital e extraindo materiais...</div></div>`;
-
-  const tabelaPrecos = precos.map(m => `- id:${m.id} | ${m.nome} | unidade:${m.unidade} | custo:R$${m.custo}`).join('\n');
-
-  const instrucao = `Você é um agente de cotação de materiais para sistemas VRF e ar condicionado da Elite Ar. Analise o edital/memorial descritivo fornecido e extraia TODOS os materiais e quantitativos relevantes para a instalação: tubulação de cobre por diâmetro (em metros), isolamento térmico, derivações/juntas Y, kits de interligação, materiais auxiliares (adesivo, fita), infraestrutura (eletrocalha, suportes), drenagem, e os equipamentos VRF principais (condensadoras, evaporadoras) quando houver quantitativo.
-
-TABELA DE PREÇOS CADASTRADA (Elite Ar):
-${tabelaPrecos}
-
-Para CADA material identificado, faça correspondência inteligente com a tabela acima. Exemplos: "tubo de cobre Ø 3/8\\"" → id do cadastro 3/8"; "isolamento 1/2\\"" → id do isolamento 1/2". Considere variações de notação (Φ, ", pol, polegadas, 1.1/4 = 1¼).
-
-Responda SOMENTE com JSON válido, SEM markdown, SEM texto extra, neste formato exato:
-{"objeto":"resumo curto do objeto do edital","itens":[{"nome":"material como descrito no edital","quantidade":number,"unidade":"m/un/etc","idPreco":"id correspondente da tabela ou null"}]}
-
-Regras:
-- Se não houver correspondência na tabela, use "idPreco":null. NUNCA invente preços nem ids.
-- quantidade deve ser número. Se o edital não trouxer quantidade clara, estime pelo memorial e marque na unidade (ex: "estimado").
-- Inclua equipamentos VRF principais mesmo sem preço cadastrado (idPreco:null), pois são importantes para o orçamento.`;
-
-  let content;
-  if(fonte.tipo === 'pdf'){
-    content = [
-      { type:'document', source:{ type:'base64', media_type:'application/pdf', data:fonte.base64 } },
-      { type:'text', text:instrucao }
-    ];
-  } else {
-    content = instrucao + '\n\n=== EDITAL / LISTA DE MATERIAIS ===\n' + fonte.texto;
-  }
-
-  try {
-    const data = await callAnthropicAPI({ model:'claude-sonnet-4-6', max_tokens:3000, messages:[{ role:'user', content }] });
-    if(data.error){ throw new Error(data.error.message || 'Erro da API'); }
-    const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
-    const jsonStr = raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
-    const parsed = JSON.parse(jsonStr);
-    renderTabelaCotacao(parsed.itens || [], precos, fonte.nome, parsed.objeto || '');
-  } catch(e){
-    res.innerHTML = `<div class="panel-hint">⚠️ Não consegui processar o edital automaticamente.<br><span style="opacity:.7">${(e.message||'').substring(0,120)}</span></div>
-      <div class="cot-actions"><button class="btn-panel ghost" onclick="resetCotacao()">Tentar de novo</button></div>`;
+  const file=input.files[0]; if(!file) return; input.value='';
+  const st=document.getElementById('cot-pdf-status');
+  st.innerHTML=`<div class="cot-loading"><div class="cot-spinner"></div><div class="cl-txt">Lendo o edital e extraindo a metragem…</div></div>`;
+  try{
+    const base64=await _toBase64(file);
+    const instrucao=`Você é um extrator técnico de editais de climatização VRF/split da Elite Ar. Leia o PDF e extraia SOMENTE quantitativos, sem calcular nada.
+Responda APENAS com JSON válido (sem markdown), neste formato exato:
+{"objeto":"resumo curto","metragem":{"3/8":0,"1/2":0,"5/8":0,"3/4":0,"7/8":0,"1":0,"1.1/4":0,"1.1/2":0,"1.5/8":0,"1.3/4":0},"juntas":{"3/8":0,"1/2":0,"5/8":0,"3/4":0,"7/8":0,"1":0,"1.1/4":0,"1.1/2":0,"1.5/8":0,"1.3/4":0},"evaporadoras":0,"condensadoras":0}
+Regras: metragem em METROS por bitola de tubo de cobre/refrigerante. Use 0 quando não houver. Considere notações Φ, ", pol, 1¼=1.1/4, 1½=1.1/2, 1⅝=1.5/8, 1¾=1.3/4. Se não encontrar juntas, deixe tudo 0.`;
+    const content=[{type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},{type:'text',text:instrucao}];
+    const data=await callAnthropicAPI({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content}]});
+    if(data.error) throw new Error(data.error.message||'Erro da API');
+    const raw=(data.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(raw.substring(raw.indexOf('{'),raw.lastIndexOf('}')+1));
+    _preencherForm(parsed);
+    st.innerHTML=`<div class="cot-ok">✓ Metragem extraída de "<b>${(parsed.objeto||file.name).substring(0,60)}</b>". Confira os campos e calcule.</div>`;
+  }catch(e){
+    st.innerHTML=`<div class="cot-err">⚠️ Não consegui ler o PDF automaticamente. Preencha manualmente.<br><span style="opacity:.6">${(e.message||'').substring(0,100)}</span></div>`;
   }
 }
 
-function renderTabelaCotacao(itens, precos, nomeFonte, objeto){
-  const mapa = {}; precos.forEach(p => mapa[p.id] = p);
-  let totCusto = 0, totVenda = 0, semPreco = 0;
-  let linhas = '';
-
-  itens.forEach(it => {
-    const p = it.idPreco ? mapa[it.idPreco] : null;
-    const qtd = Number(it.quantidade) || 0;
-    if(p && p.custo > 0 && qtd > 0){
-      const custoTot = p.custo * qtd;
-      const vendaUnit = p.custo * MARGEM;
-      const vendaTot = custoTot * MARGEM;
-      totCusto += custoTot; totVenda += vendaTot;
-      linhas += `<tr>
-        <td>${it.nome}</td>
-        <td>${qtd}</td>
-        <td>${it.unidade || p.unidade}</td>
-        <td>R$ ${fmtBR(p.custo)}</td>
-        <td>R$ ${fmtBR(custoTot)}</td>
-        <td>R$ ${fmtBR(vendaUnit)}</td>
-        <td>R$ ${fmtBR(vendaTot)}</td>
-      </tr>`;
-    } else {
-      semPreco++;
-      linhas += `<tr class="sem-preco">
-        <td>${it.nome}</td>
-        <td>${qtd || '—'}</td>
-        <td>${it.unidade || '—'}</td>
-        <td colspan="4"><span class="tag-falta">⚠️ Preço não cadastrado</span></td>
-      </tr>`;
-    }
+function _preencherForm(d){
+  const m=d.metragem||{}, j=d.juntas||{};
+  BITOLAS.forEach(b=>{
+    const me=document.getElementById('m_'+b); if(me&&Number(m[b])>0) me.value=m[b];
+    const je=document.getElementById('j_'+b); if(je&&Number(j[b])>0) je.value=j[b];
   });
+  if(d.evaporadoras>0) document.getElementById('cot-evap').value=d.evaporadoras;
+  if(d.condensadoras>0) document.getElementById('cot-cond').value=d.condensadoras;
+}
 
-  const margemTot = totVenda - totCusto;
-  const res = document.getElementById('cot-result');
+function carregarExemploVarginha(){
+  const met={'3/8':59,'1/2':23,'5/8':76,'3/4':59,'7/8':7,'1':4,'1.1/4':29,'1.1/2':16,'1.5/8':3,'1.3/4':16};
+  BITOLAS.forEach(b=>{ const e=document.getElementById('m_'+b); if(e) e.value=met[b]||''; });
+  document.getElementById('cot-evap').value=21;
+  document.getElementById('cot-cond').value=3;
+  document.getElementById('cot-oleo').value=3;
+  document.getElementById('cot-pdf-status').innerHTML=`<div class="cot-ok">★ Exemplo <b>Varginha PE 081/2025</b> carregado (292m, 21 evaps). Clique em Calcular.</div>`;
+}
 
-  let html = '';
-  if(objeto){ html += `<div class="panel-hint"><b>Objeto:</b> ${objeto}</div>`; }
+function calcularCotacao(){
+  // lê metragem + juntas
+  const metragem={}, juntas={};
+  BITOLAS.forEach(b=>{ metragem[b]=_numIn('m_'+b); juntas[b]=_numIn('j_'+b); });
+  const evaps=_numIn('cot-evap'), conds=_numIn('cot-cond');
+  const refQtd=_numIn('cot-ref-qtd'), refVal=_numIn('cot-ref-val');
+  const drenM=_numIn('cot-dren-m'), drenC=_numIn('cot-dren-c'), drenT=_numIn('cot-dren-t');
+  const gasVal=_numIn('cot-gas-val'), oleo=_numIn('cot-oleo');
 
-  html += `<div class="cot-resumo">
-    <div class="cot-card custo"><div class="cc-label">Custo</div><div class="cc-val">R$ ${fmtBR(totCusto)}</div></div>
-    <div class="cot-card venda"><div class="cc-label">Venda</div><div class="cc-val">R$ ${fmtBR(totVenda)}</div></div>
-    <div class="cot-card margem"><div class="cc-label">Margem 30%</div><div class="cc-val">R$ ${fmtBR(margemTot)}</div></div>
+  const totalMet=Object.values(metragem).reduce((a,b)=>a+b,0);
+  if(totalMet<=0 && refQtd<=0 && drenM<=0){ alert('Informe ao menos a metragem de tubulação.'); return; }
+
+  const q=calcularQuantidades({metragem,juntas,evaporadoras:evaps});
+
+  // monta linhas {grupo,nome,qtd,un,chave?,precoFixo?}
+  const linhas=[]; const semPreco=[];
+  function push(grupo,nome,qtd,un,chave,precoFixo){
+    if(qtd<=0 && precoFixo==null) return;
+    let preco=null, loja='—';
+    if(precoFixo!=null){ preco=precoFixo; loja='manual'; }
+    else if(chave){ const it=_itemPorChave(chave); if(it){ const mp=menorPreco(it); if(mp){ preco=mp.preco; loja=mp.loja; } } }
+    const total = preco!=null ? qtd*preco : null;
+    if(total==null) semPreco.push(nome);
+    linhas.push({grupo,nome,qtd,un,preco,loja,total});
+  }
+
+  // Cobre por bitola
+  BITOLAS.forEach(b=>{ const m=metragem[b]; if(m>0){
+    const flex=BITOLAS_FLEX.includes(b);
+    push('Tubulação de Cobre', (flex?'Cobre flex ':'Cobre ríg. ')+b+'"', m, 'm', (flex?'cob_f_':'cob_r_')+b);
+  }});
+  // Isolamento por bitola (barras 2m)
+  BITOLAS.forEach(b=>{ if(q.isol[b]>0) push('Isolamento', 'Isolamento elast. '+b+'"', q.isol[b], 'br 2m', 'iso_'+b); });
+  // Suportes
+  push('Suportes e Fixação','Perfilado 38x38 (6m)', q.perfilado.barras,'barra','perfilado');
+  push('Suportes e Fixação','Barra roscada 1/4" (3m)', q.barraRosc.barras,'barra','barra_rosc');
+  push('Suportes e Fixação','Kit parabolt 1/4"', q.parabolt,'un','parabolt');
+  push('Suportes e Fixação','Porca 1/4"', q.porca,'un','porca');
+  push('Suportes e Fixação','Arruela 1/4"', q.arruela,'un','arruela');
+  if(conds>0) push('Suportes e Fixação','Suporte condensadora', conds,'un','suporte_cond');
+  // Consumíveis
+  if(q.foscoper.varetas>0) push('Solda e Consumíveis','Vareta foscoper 2,5mm', q.foscoper.varetas,'vareta','foscoper');
+  push('Solda e Consumíveis','Cola de contato 750ml', q.cola,'lata','cola');
+  push('Solda e Consumíveis','Fita aluminizada', CC.FITA_ALU,'rolo','fita_alu');
+  push('Solda e Consumíveis','Fita tape preta', CC.FITA_TAPE,'rolo','fita_tape');
+  // Drenagem
+  if(drenM>0) push('Drenagem','Tubo PVC dreno', drenM,'m','pvc_dreno');
+  if(drenC>0) push('Drenagem','Curva 90° dreno', drenC,'un','curva90');
+  if(drenT>0) push('Drenagem','Tê dreno', drenT,'un','te_dreno');
+  // Refinetes (manual: qtd × valor)
+  if(refQtd>0) push('Refinetes','Refinete (derivação Y)', refQtd,'un',null, refVal>0?refVal:null);
+  // Gás / óleo
+  if(gasVal>0) push('Gás e Óleo','Refrigerante (fluxograma)', 1,'vb',null, gasVal);
+  if(oleo>0) push('Gás e Óleo','Óleo refrigeração', oleo,'un','oleo');
+
+  _renderTabelaCotacao(linhas, semPreco, q);
+}
+
+function _renderTabelaCotacao(linhas, semPreco, q){
+  const res=document.getElementById('cot-result');
+  let custoTotal=0;
+  // agrupa
+  const grupos={}; linhas.forEach(l=>{ (grupos[l.grupo]=grupos[l.grupo]||[]).push(l); if(l.total!=null) custoTotal+=l.total; });
+
+  const venda=custoTotal*MARGEM, lucro=venda-custoTotal;
+
+  let html=`<div class="cot-resumo">
+    <div class="cot-card custo"><div class="cc-label">Custo</div><div class="cc-val">R$ ${fmtBR(custoTotal)}</div></div>
+    <div class="cot-card venda"><div class="cc-label">Venda (+30%)</div><div class="cc-val">R$ ${fmtBR(venda)}</div></div>
+    <div class="cot-card margem"><div class="cc-label">Lucro</div><div class="cc-val">R$ ${fmtBR(lucro)}</div></div>
   </div>`;
 
-  html += `<div class="cot-table-wrap"><table class="cot-table">
-    <thead><tr>
-      <th>Material</th><th>Qtd</th><th>Un</th>
-      <th>Custo un</th><th>Custo total</th><th>Venda un</th><th>Venda total</th>
-    </tr></thead>
-    <tbody>${linhas}</tbody>
-    <tfoot><tr>
-      <td colspan="4">TOTAIS</td>
-      <td>R$ ${fmtBR(totCusto)}</td>
-      <td>—</td>
-      <td>R$ ${fmtBR(totVenda)}</td>
-    </tr></tfoot>
-  </table></div>`;
+  html+=`<div class="cot-table-wrap"><table class="cot-table">
+    <thead><tr><th>Material</th><th>Qtd</th><th>Un</th><th>R$ un</th><th>Loja</th><th>R$ total</th></tr></thead><tbody>`;
+  Object.keys(grupos).forEach(g=>{
+    html+=`<tr class="cot-grp"><td colspan="6">${g}</td></tr>`;
+    grupos[g].forEach(l=>{
+      if(l.total!=null){
+        html+=`<tr><td>${l.nome}</td><td>${(+l.qtd.toFixed(2))}</td><td>${l.un}</td><td>R$ ${fmtBR(l.preco)}</td><td><span class="loja-tag ${l.loja==='manual'?'man':''}">${l.loja}</span></td><td>R$ ${fmtBR(l.total)}</td></tr>`;
+      } else {
+        html+=`<tr class="sem-preco"><td>${l.nome}</td><td>${(+l.qtd.toFixed(2))}</td><td>${l.un}</td><td colspan="3"><span class="tag-falta">⚠️ preço não cadastrado</span></td></tr>`;
+      }
+    });
+  });
+  html+=`</tbody><tfoot><tr><td colspan="5">CUSTO TOTAL</td><td>R$ ${fmtBR(custoTotal)}</td></tr>
+    <tr class="tf-venda"><td colspan="5">PREÇO DE VENDA (margem 30%)</td><td>R$ ${fmtBR(venda)}</td></tr></tfoot></table></div>`;
 
-  if(semPreco > 0){
-    html += `<div class="cot-alerta-falta">⚠️ <b>${semPreco}</b> item(ns) sem preço cadastrado não entraram no total. Cadastre-os em <b>Preços de Materiais</b> e gere a cotação novamente.</div>`;
+  // notas
+  const notas=[];
+  if(q.foscoper.pend && q.foscoper.pend.length) notas.push(`Foscoper sem fator p/ bitola(s): ${q.foscoper.pend.join(', ')}.`);
+  if(q.foscoper.varetas>0 && q.foscoper.det) {
+    const usaProv = Object.keys(q.foscoper.det).some(b=>FOSCOPER_PROV.includes(b));
+    if(usaProv) notas.push('Fator de foscoper provisório em algumas bitolas (5/8, 7/8, 1.5/8, 1.3/4) — confirmar.');
   }
+  if(notas.length) html+=`<div class="cot-nota">ℹ️ ${notas.join(' ')}</div>`;
+  if(semPreco.length) html+=`<div class="cot-alerta-falta">⚠️ <b>${semPreco.length}</b> item(ns) sem preço não entraram no total. Cadastre em <b>Preços de Materiais</b>: ${semPreco.slice(0,6).join(', ')}${semPreco.length>6?'…':''}.</div>`;
 
-  html += `<div class="cot-actions">
+  html+=`<div class="cot-actions">
     <button class="btn-panel ghost" onclick="abrirPainelPrecos()">Ajustar preços</button>
+    <button class="btn-panel ghost" onclick="window.print()">Imprimir / PDF</button>
     <button class="btn-panel primary" onclick="resetCotacao()">Nova cotação</button>
   </div>`;
-
-  res.innerHTML = html;
+  res.innerHTML=html;
+  res.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 
@@ -2878,7 +3096,7 @@ function renderTabelaCotacao(itens, precos, nomeFonte, objeto){
     <div class="panel-title">⚙️ Preços de Materiais</div>
   </div>
   <div class="panel-body">
-    <div class="panel-hint">Cadastre o <b>custo</b> de cada material. O <b>Agente de Cotação</b> usa esta tabela para calcular o orçamento aplicando margem de <b>30%</b>. Salvo neste dispositivo.</div>
+    <div class="panel-hint">Cadastre o preço de cada material em até <b>3 lojas</b> (Climario, Dufrio, Frigelar). O agente usa o <b>menor preço</b> e aplica margem de <b>30%</b>. Já vem com os preços de referência da planilha. Salvo neste dispositivo.</div>
     <div class="panel-toolbar">
       <button class="btn-panel primary" onclick="abrirFormMat()">+ Novo material</button>
       <button class="btn-panel ghost" onclick="resetarBOM()">Restaurar padrão</button>
@@ -2897,19 +3115,7 @@ function renderTabelaCotacao(itens, precos, nomeFonte, objeto){
     <div class="panel-title">📋 Agente de Cotação VRF</div>
   </div>
   <div class="panel-body">
-    <div id="cot-intro">
-      <div class="panel-hint">Envie o <b>PDF do edital/memorial</b>. A Elite IA extrai os materiais, cruza com seus <b>preços cadastrados</b> e gera o orçamento com margem de <b>30%</b>.</div>
-      <div class="cot-dropzone" onclick="document.getElementById('cot-file-input').click()">
-        <svg width="34" height="34" fill="none" stroke="#3ab5cc" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        <div class="dz-title">Enviar PDF do edital</div>
-        <div class="dz-sub">Toque para selecionar o arquivo</div>
-      </div>
-      <input type="file" id="cot-file-input" accept=".pdf" style="display:none" onchange="handleFileCotacao(this)"/>
-      <div class="cot-divider">ou</div>
-      <textarea id="cot-texto" placeholder="Cole aqui a lista de materiais ou um trecho do memorial descritivo..."></textarea>
-      <button class="btn-panel primary" style="width:100%" onclick="cotarPorTexto()">Gerar cotação do texto</button>
-    </div>
-    <div id="cot-result" class="cot-result"></div>
+    <div id="cot-body"></div>
   </div>
 </div>
 
