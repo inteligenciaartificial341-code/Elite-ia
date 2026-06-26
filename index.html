@@ -778,6 +778,154 @@
   }
   .vc-btn-end:hover { background: #d3433c; }
 
+
+  /* ═══════════════════════════════════════════ */
+  /*  PAINÉIS: PREÇOS DE MATERIAIS & COTAÇÃO VRF  */
+  /* ═══════════════════════════════════════════ */
+  .panel-full {
+    position: fixed;
+    inset: 0;
+    z-index: 160;
+    background: linear-gradient(180deg, var(--teal-deep) 0%, #0b2c34 100%);
+    display: none;
+    flex-direction: column;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .panel-full.active { display: flex; }
+  .panel-full.desktop-mode { max-width: 100%; }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: calc(16px + env(safe-area-inset-top)) 18px 16px;
+    border-bottom: 1px solid var(--white-20);
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 17px; font-weight: 700; letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-back {
+    background: none; border: none; color: var(--white);
+    cursor: pointer; padding: 4px; display: flex; flex-shrink: 0;
+  }
+  .panel-back:hover { color: var(--teal-glow); }
+  .panel-body { flex: 1; overflow-y: auto; padding: 16px 16px 60px; }
+  .panel-body::-webkit-scrollbar { width: 3px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--white-20); border-radius: 2px; }
+
+  .panel-hint {
+    font-size: 12px; color: var(--white-80); line-height: 1.5;
+    background: var(--white-10); border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+  .panel-hint b { color: var(--teal-glow); }
+
+  /* Lista de materiais */
+  .mat-group-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    color: var(--teal-glow); text-transform: uppercase;
+    margin: 18px 0 8px; padding-bottom: 5px;
+    border-bottom: 1px solid var(--white-10);
+  }
+  .mat-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--white-10); border: 1px solid var(--white-20);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+  }
+  .mat-info { flex: 1; min-width: 0; }
+  .mat-nome { font-size: 14px; font-weight: 600; color: var(--white); }
+  .mat-sub { font-size: 11px; color: var(--white-80); margin-top: 2px; }
+  .mat-custo { font-size: 14px; font-weight: 700; color: var(--teal-glow); white-space: nowrap; }
+  .mat-custo.vazio { color: #ff9b6b; font-weight: 600; font-size: 11px; }
+  .mat-actions { display: flex; gap: 2px; flex-shrink: 0; }
+  .mat-btn {
+    background: none; border: none; color: rgba(255,255,255,0.45);
+    cursor: pointer; padding: 6px; display: flex; transition: color 0.2s;
+  }
+  .mat-btn:hover { color: var(--white); }
+  .mat-btn.del:hover { color: #ff7b7b; }
+
+  /* Form material */
+  .mat-form {
+    background: rgba(58,181,204,0.08);
+    border: 1px solid rgba(58,181,204,0.28);
+    border-radius: 12px; padding: 14px; margin-bottom: 16px;
+  }
+  .mat-form h4 { font-size: 13px; color: var(--teal-glow); margin-bottom: 10px; }
+  .mat-form input, .mat-form select {
+    width: 100%; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
+    padding: 10px 12px; color: var(--white); font-size: 16px;
+    font-family: 'Inter', sans-serif; outline: none; margin-bottom: 8px;
+  }
+  .mat-form input:focus, .mat-form select:focus { border-color: var(--teal-glow); }
+  .mat-form input::placeholder { color: rgba(255,255,255,0.3); }
+  .mat-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mat-form .row2 input, .mat-form .row2 select { margin-bottom: 0; }
+  .mat-form-btns { display: flex; gap: 8px; margin-top: 12px; }
+
+  .btn-panel {
+    flex: 1; border: none; border-radius: 8px; padding: 12px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter', sans-serif; transition: opacity 0.2s;
+  }
+  .btn-panel.primary { background: linear-gradient(135deg, var(--teal-light), var(--teal-glow)); color: #062028; }
+  .btn-panel.ghost { background: var(--white-10); color: var(--white); border: 1px solid var(--white-20); }
+  .btn-panel:hover { opacity: 0.9; }
+  .panel-toolbar { display: flex; gap: 8px; margin-bottom: 14px; }
+  .panel-toolbar .btn-panel { font-size: 13px; padding: 10px; }
+
+  /* Cotação */
+  .cot-dropzone {
+    border: 2px dashed rgba(58,181,204,0.4);
+    border-radius: 14px; padding: 28px 20px; text-align: center;
+    cursor: pointer; transition: background 0.2s, border-color 0.2s;
+    margin-bottom: 14px;
+  }
+  .cot-dropzone:hover { background: rgba(58,181,204,0.07); border-color: var(--teal-glow); }
+  .cot-dropzone .dz-title { font-size: 15px; font-weight: 600; color: var(--white); margin: 8px 0 4px; }
+  .cot-dropzone .dz-sub { font-size: 12px; color: var(--white-80); }
+  .cot-divider { text-align: center; color: var(--white-80); font-size: 12px; margin: 14px 0; position: relative; }
+  .cot-divider::before, .cot-divider::after { content: ''; position: absolute; top: 50%; width: 40%; height: 1px; background: var(--white-20); }
+  .cot-divider::before { left: 0; } .cot-divider::after { right: 0; }
+  #cot-texto {
+    width: 100%; min-height: 90px; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 10px;
+    padding: 12px; color: var(--white); font-size: 14px;
+    font-family: 'Inter', sans-serif; outline: none; resize: vertical; margin-bottom: 10px;
+  }
+  #cot-texto:focus { border-color: var(--teal-glow); }
+  #cot-texto::placeholder { color: rgba(255,255,255,0.3); }
+
+  .cot-loading { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 44px 20px; text-align: center; }
+  .cot-spinner { width: 38px; height: 38px; border: 3px solid var(--white-20); border-top-color: var(--teal-glow); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cot-loading .cl-txt { font-size: 13px; color: var(--white-80); font-style: italic; }
+
+  .cot-resumo { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0 14px; }
+  .cot-card { background: var(--white-10); border: 1px solid var(--white-20); border-radius: 10px; padding: 12px 8px; text-align: center; }
+  .cot-card .cc-label { font-size: 10px; color: var(--white-80); text-transform: uppercase; letter-spacing: 0.5px; }
+  .cot-card .cc-val { font-size: 15px; font-weight: 700; margin-top: 4px; }
+  .cot-card.custo .cc-val { color: #ff9b6b; }
+  .cot-card.venda .cc-val { color: var(--teal-glow); }
+  .cot-card.margem .cc-val { color: #7ee787; }
+
+  .cot-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--white-20); -webkit-overflow-scrolling: touch; }
+  table.cot-table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--card-bg); }
+  table.cot-table th { background: var(--teal-mid); color: #fff; padding: 9px 8px; text-align: left; font-weight: 600; white-space: nowrap; font-size: 11px; }
+  table.cot-table td { padding: 8px; border-top: 1px solid #e0eef1; color: var(--text-dark); white-space: nowrap; }
+  table.cot-table tr.sem-preco td { background: #fff6f0; }
+  table.cot-table .tag-falta { color: #c2410c; font-size: 10px; font-weight: 700; }
+  table.cot-table tfoot td { background: #eaf6f9; font-weight: 700; color: var(--teal-deep); border-top: 2px solid var(--teal-light); font-size: 12px; }
+  .cot-alerta-falta {
+    background: #fff6f0; border: 1px solid #f3c2a0; border-radius: 10px;
+    padding: 10px 12px; margin-top: 12px; font-size: 12px; color: #9a3412;
+  }
+  .cot-actions { display: flex; gap: 8px; margin-top: 14px; }
+
 </style>
 </head>
 <body>
@@ -826,10 +974,9 @@
     Meus Agentes
   </button>
 
-  <button class="sidebar-item" onclick="closeSidebar()">
-    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
-    Criar Novo Agente
-    <span class="badge">Em breve</span>
+  <button class="sidebar-item" onclick="abrirAgenteCotacao(); closeSidebar()">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+    Agente de Cotação VRF
   </button>
 
   <div class="sidebar-divider"></div>
@@ -843,6 +990,14 @@
   <button class="sidebar-item" onclick="document.getElementById('file-input').click(); closeSidebar()">
     <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Novo Documento
+  </button>
+
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-section-label">Configuração</div>
+
+  <button class="sidebar-item" onclick="abrirPainelPrecos(); closeSidebar()">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Preços de Materiais
   </button>
 
   <div class="sidebar-divider"></div>
@@ -1470,6 +1625,8 @@ function toggleView() {
     iconM.style.display = 'block';
     iconD.style.display = 'none';
   }
+  // Acompanhar nos painéis abertos
+  document.querySelectorAll('.panel-full').forEach(p => p.classList.toggle('desktop-mode', isDesktop));
 }
 
 
@@ -2316,6 +2473,338 @@ function _vcFalar(texto, onEnd) {
 }
 
 
+// ═══════════════════════════════════════════════════
+//  PREÇOS DE MATERIAIS  +  AGENTE DE COTAÇÃO VRF
+// ═══════════════════════════════════════════════════
+
+const PRECOS_KEY = 'elite_precos_materiais';
+const MARGEM = 1.30; // 30% fixo
+
+// BOM padrão Elite Ar (custo 0 = a preencher)
+const BOM_PADRAO = [
+  // Tubulação de cobre por diâmetro
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1/4"',   unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 3/8"',   unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1/2"',   unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 5/8"',   unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 3/4"',   unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 7/8"',   unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1"',     unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.1/4"', unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.1/2"', unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.5/8"', unidade:'m', custo:0 },
+  { grupo:'Tubulação de Cobre', nome:'Tubo de cobre 1.3/4"', unidade:'m', custo:0 },
+  // Isolamento térmico
+  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 1/4"', unidade:'m', custo:0 },
+  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 3/8"', unidade:'m', custo:0 },
+  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 1/2"', unidade:'m', custo:0 },
+  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 5/8"', unidade:'m', custo:0 },
+  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 3/4"', unidade:'m', custo:0 },
+  { grupo:'Isolamento Térmico', nome:'Isolamento térmico 7/8"', unidade:'m', custo:0 },
+  // Materiais auxiliares
+  { grupo:'Materiais Auxiliares', nome:'Adesivo / cola PVC',  unidade:'un',   custo:0 },
+  { grupo:'Materiais Auxiliares', nome:'Fita PVC (rolo)',     unidade:'rolo', custo:0 },
+  { grupo:'Materiais Auxiliares', nome:'Fita de alumínio',    unidade:'rolo', custo:0 },
+  { grupo:'Materiais Auxiliares', nome:'Massa de calafetar',  unidade:'un',   custo:0 },
+  // Infraestrutura
+  { grupo:'Infraestrutura', nome:'Eletrocalha perfurada',     unidade:'m',  custo:0 },
+  { grupo:'Infraestrutura', nome:'Perfilado',                 unidade:'m',  custo:0 },
+  { grupo:'Infraestrutura', nome:'Abraçadeira / suporte',     unidade:'un', custo:0 },
+  { grupo:'Infraestrutura', nome:'Mão francesa / suporte condensadora', unidade:'un', custo:0 },
+  // Dreno
+  { grupo:'Drenagem', nome:'Tubo PVC dreno 25mm', unidade:'m',  custo:0 },
+  { grupo:'Drenagem', nome:'Tubo PVC dreno 32mm', unidade:'m',  custo:0 },
+  { grupo:'Drenagem', nome:'Conexões PVC dreno',  unidade:'un', custo:0 },
+];
+
+function _uid(){ return 'm' + Date.now().toString(36) + Math.random().toString(36).substr(2,4); }
+function fmtBR(n){ return Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function carregarPrecos(){
+  try { const r = JSON.parse(localStorage.getItem(PRECOS_KEY)||'null'); if(Array.isArray(r)&&r.length) return r; } catch(e){}
+  return null;
+}
+function salvarPrecos(arr){ try { localStorage.setItem(PRECOS_KEY, JSON.stringify(arr)); } catch(e){ console.error('Erro ao salvar preços',e); } }
+function _garantirBOM(){
+  let p = carregarPrecos();
+  if(!p){ p = BOM_PADRAO.map(m => ({ id:_uid(), ...m })); salvarPrecos(p); }
+  return p;
+}
+
+// ── PAINEL DE PREÇOS ──
+let _matEditId = null;
+
+function abrirPainelPrecos(){
+  _garantirBOM();
+  _matEditId = null;
+  document.getElementById('mat-form-container').innerHTML = '';
+  const pnl = document.getElementById('pricing-panel');
+  pnl.classList.toggle('desktop-mode', isDesktop);
+  pnl.classList.add('active');
+  renderListaPrecos();
+}
+function fecharPainelPrecos(){
+  document.getElementById('pricing-panel').classList.remove('active');
+  document.getElementById('mat-form-container').innerHTML = '';
+  _matEditId = null;
+}
+
+function renderListaPrecos(){
+  const cont = document.getElementById('precos-lista');
+  const precos = _garantirBOM();
+  const grupos = {};
+  precos.forEach(m => { (grupos[m.grupo] = grupos[m.grupo] || []).push(m); });
+
+  let html = '';
+  Object.keys(grupos).forEach(g => {
+    html += `<div class="mat-group-label">${g}</div>`;
+    grupos[g].forEach(m => {
+      const custoTxt = m.custo > 0
+        ? `<div class="mat-custo">R$ ${fmtBR(m.custo)}</div>`
+        : `<div class="mat-custo vazio">⚠️ definir</div>`;
+      html += `
+        <div class="mat-row">
+          <div class="mat-info">
+            <div class="mat-nome">${m.nome}</div>
+            <div class="mat-sub">por ${m.unidade}</div>
+          </div>
+          ${custoTxt}
+          <div class="mat-actions">
+            <button class="mat-btn" onclick="abrirFormMat('${m.id}')" title="Editar">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="mat-btn del" onclick="removerMat('${m.id}')" title="Excluir">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </button>
+          </div>
+        </div>`;
+    });
+  });
+  cont.innerHTML = html;
+}
+
+function abrirFormMat(id){
+  _matEditId = id || null;
+  const precos = _garantirBOM();
+  const m = id ? precos.find(x => x.id === id) : null;
+  const grupos = [...new Set(precos.map(p => p.grupo))];
+  const grupoAtual = m ? m.grupo : (grupos[0] || 'Materiais Auxiliares');
+
+  const cont = document.getElementById('mat-form-container');
+  cont.innerHTML = `
+    <div class="mat-form">
+      <h4>${m ? 'Editar material' : 'Novo material'}</h4>
+      <input type="text" id="mat-nome" placeholder="Nome do material" value="${m ? m.nome.replace(/"/g,'&quot;') : ''}">
+      <input list="mat-grupos" id="mat-grupo" placeholder="Grupo" value="${grupoAtual}">
+      <datalist id="mat-grupos">${grupos.map(g => `<option value="${g}">`).join('')}</datalist>
+      <div class="row2">
+        <input type="text" id="mat-unidade" placeholder="Unidade (m, un...)" value="${m ? m.unidade : ''}">
+        <input type="number" id="mat-custo" placeholder="Custo R$" inputmode="decimal" step="0.01" value="${m && m.custo ? m.custo : ''}">
+      </div>
+      <div class="mat-form-btns">
+        <button class="btn-panel ghost" onclick="cancelarFormMat()">Cancelar</button>
+        <button class="btn-panel primary" onclick="salvarMat()">Salvar</button>
+      </div>
+    </div>`;
+  cont.scrollIntoView({ behavior:'smooth', block:'start' });
+  setTimeout(() => document.getElementById('mat-nome')?.focus(), 200);
+}
+
+function cancelarFormMat(){
+  document.getElementById('mat-form-container').innerHTML = '';
+  _matEditId = null;
+}
+
+function salvarMat(){
+  const nome = document.getElementById('mat-nome').value.trim();
+  const grupo = document.getElementById('mat-grupo').value.trim() || 'Outros';
+  const unidade = document.getElementById('mat-unidade').value.trim() || 'un';
+  const custo = parseFloat(String(document.getElementById('mat-custo').value).replace(',', '.')) || 0;
+  if(!nome){ alert('Informe o nome do material.'); return; }
+
+  const precos = _garantirBOM();
+  if(_matEditId){
+    const m = precos.find(x => x.id === _matEditId);
+    if(m){ m.nome = nome; m.grupo = grupo; m.unidade = unidade; m.custo = custo; }
+  } else {
+    precos.push({ id:_uid(), grupo, nome, unidade, custo });
+  }
+  salvarPrecos(precos);
+  cancelarFormMat();
+  renderListaPrecos();
+}
+
+function removerMat(id){
+  if(!confirm('Excluir este material da tabela de preços?')) return;
+  const precos = _garantirBOM().filter(x => x.id !== id);
+  salvarPrecos(precos);
+  renderListaPrecos();
+}
+
+function resetarBOM(){
+  if(!confirm('Restaurar a lista padrão de materiais? Os preços que você cadastrou serão perdidos.')) return;
+  const novo = BOM_PADRAO.map(m => ({ id:_uid(), ...m }));
+  salvarPrecos(novo);
+  cancelarFormMat();
+  renderListaPrecos();
+}
+
+// ── AGENTE DE COTAÇÃO VRF ──
+function abrirAgenteCotacao(){
+  _garantirBOM();
+  const pnl = document.getElementById('cotacao-panel');
+  pnl.classList.toggle('desktop-mode', isDesktop);
+  pnl.classList.add('active');
+  resetCotacao();
+}
+function fecharAgenteCotacao(){ document.getElementById('cotacao-panel').classList.remove('active'); }
+
+function resetCotacao(){
+  document.getElementById('cot-intro').style.display = 'block';
+  document.getElementById('cot-result').innerHTML = '';
+  const t = document.getElementById('cot-texto'); if(t) t.value = '';
+}
+
+function _toBase64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Erro ao ler arquivo'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function handleFileCotacao(input){
+  const file = input.files[0]; if(!file) return;
+  const base64 = await _toBase64(file);
+  input.value = '';
+  iniciarCotacao({ tipo:'pdf', base64, nome:file.name });
+}
+
+function cotarPorTexto(){
+  const t = document.getElementById('cot-texto').value.trim();
+  if(!t){ alert('Cole a lista de materiais ou um trecho do memorial primeiro.'); return; }
+  iniciarCotacao({ tipo:'texto', texto:t, nome:'Texto colado' });
+}
+
+async function iniciarCotacao(fonte){
+  const precos = _garantirBOM();
+  document.getElementById('cot-intro').style.display = 'none';
+  const res = document.getElementById('cot-result');
+  res.innerHTML = `<div class="cot-loading"><div class="cot-spinner"></div><div class="cl-txt">Lendo o edital e extraindo materiais...</div></div>`;
+
+  const tabelaPrecos = precos.map(m => `- id:${m.id} | ${m.nome} | unidade:${m.unidade} | custo:R$${m.custo}`).join('\n');
+
+  const instrucao = `Você é um agente de cotação de materiais para sistemas VRF e ar condicionado da Elite Ar. Analise o edital/memorial descritivo fornecido e extraia TODOS os materiais e quantitativos relevantes para a instalação: tubulação de cobre por diâmetro (em metros), isolamento térmico, derivações/juntas Y, kits de interligação, materiais auxiliares (adesivo, fita), infraestrutura (eletrocalha, suportes), drenagem, e os equipamentos VRF principais (condensadoras, evaporadoras) quando houver quantitativo.
+
+TABELA DE PREÇOS CADASTRADA (Elite Ar):
+${tabelaPrecos}
+
+Para CADA material identificado, faça correspondência inteligente com a tabela acima. Exemplos: "tubo de cobre Ø 3/8\\"" → id do cadastro 3/8"; "isolamento 1/2\\"" → id do isolamento 1/2". Considere variações de notação (Φ, ", pol, polegadas, 1.1/4 = 1¼).
+
+Responda SOMENTE com JSON válido, SEM markdown, SEM texto extra, neste formato exato:
+{"objeto":"resumo curto do objeto do edital","itens":[{"nome":"material como descrito no edital","quantidade":number,"unidade":"m/un/etc","idPreco":"id correspondente da tabela ou null"}]}
+
+Regras:
+- Se não houver correspondência na tabela, use "idPreco":null. NUNCA invente preços nem ids.
+- quantidade deve ser número. Se o edital não trouxer quantidade clara, estime pelo memorial e marque na unidade (ex: "estimado").
+- Inclua equipamentos VRF principais mesmo sem preço cadastrado (idPreco:null), pois são importantes para o orçamento.`;
+
+  let content;
+  if(fonte.tipo === 'pdf'){
+    content = [
+      { type:'document', source:{ type:'base64', media_type:'application/pdf', data:fonte.base64 } },
+      { type:'text', text:instrucao }
+    ];
+  } else {
+    content = instrucao + '\n\n=== EDITAL / LISTA DE MATERIAIS ===\n' + fonte.texto;
+  }
+
+  try {
+    const data = await callAnthropicAPI({ model:'claude-sonnet-4-6', max_tokens:3000, messages:[{ role:'user', content }] });
+    if(data.error){ throw new Error(data.error.message || 'Erro da API'); }
+    const raw = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+    const jsonStr = raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+    const parsed = JSON.parse(jsonStr);
+    renderTabelaCotacao(parsed.itens || [], precos, fonte.nome, parsed.objeto || '');
+  } catch(e){
+    res.innerHTML = `<div class="panel-hint">⚠️ Não consegui processar o edital automaticamente.<br><span style="opacity:.7">${(e.message||'').substring(0,120)}</span></div>
+      <div class="cot-actions"><button class="btn-panel ghost" onclick="resetCotacao()">Tentar de novo</button></div>`;
+  }
+}
+
+function renderTabelaCotacao(itens, precos, nomeFonte, objeto){
+  const mapa = {}; precos.forEach(p => mapa[p.id] = p);
+  let totCusto = 0, totVenda = 0, semPreco = 0;
+  let linhas = '';
+
+  itens.forEach(it => {
+    const p = it.idPreco ? mapa[it.idPreco] : null;
+    const qtd = Number(it.quantidade) || 0;
+    if(p && p.custo > 0 && qtd > 0){
+      const custoTot = p.custo * qtd;
+      const vendaUnit = p.custo * MARGEM;
+      const vendaTot = custoTot * MARGEM;
+      totCusto += custoTot; totVenda += vendaTot;
+      linhas += `<tr>
+        <td>${it.nome}</td>
+        <td>${qtd}</td>
+        <td>${it.unidade || p.unidade}</td>
+        <td>R$ ${fmtBR(p.custo)}</td>
+        <td>R$ ${fmtBR(custoTot)}</td>
+        <td>R$ ${fmtBR(vendaUnit)}</td>
+        <td>R$ ${fmtBR(vendaTot)}</td>
+      </tr>`;
+    } else {
+      semPreco++;
+      linhas += `<tr class="sem-preco">
+        <td>${it.nome}</td>
+        <td>${qtd || '—'}</td>
+        <td>${it.unidade || '—'}</td>
+        <td colspan="4"><span class="tag-falta">⚠️ Preço não cadastrado</span></td>
+      </tr>`;
+    }
+  });
+
+  const margemTot = totVenda - totCusto;
+  const res = document.getElementById('cot-result');
+
+  let html = '';
+  if(objeto){ html += `<div class="panel-hint"><b>Objeto:</b> ${objeto}</div>`; }
+
+  html += `<div class="cot-resumo">
+    <div class="cot-card custo"><div class="cc-label">Custo</div><div class="cc-val">R$ ${fmtBR(totCusto)}</div></div>
+    <div class="cot-card venda"><div class="cc-label">Venda</div><div class="cc-val">R$ ${fmtBR(totVenda)}</div></div>
+    <div class="cot-card margem"><div class="cc-label">Margem 30%</div><div class="cc-val">R$ ${fmtBR(margemTot)}</div></div>
+  </div>`;
+
+  html += `<div class="cot-table-wrap"><table class="cot-table">
+    <thead><tr>
+      <th>Material</th><th>Qtd</th><th>Un</th>
+      <th>Custo un</th><th>Custo total</th><th>Venda un</th><th>Venda total</th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr>
+      <td colspan="4">TOTAIS</td>
+      <td>R$ ${fmtBR(totCusto)}</td>
+      <td>—</td>
+      <td>R$ ${fmtBR(totVenda)}</td>
+    </tr></tfoot>
+  </table></div>`;
+
+  if(semPreco > 0){
+    html += `<div class="cot-alerta-falta">⚠️ <b>${semPreco}</b> item(ns) sem preço cadastrado não entraram no total. Cadastre-os em <b>Preços de Materiais</b> e gere a cotação novamente.</div>`;
+  }
+
+  html += `<div class="cot-actions">
+    <button class="btn-panel ghost" onclick="abrirPainelPrecos()">Ajustar preços</button>
+    <button class="btn-panel primary" onclick="resetCotacao()">Nova cotação</button>
+  </div>`;
+
+  res.innerHTML = html;
+}
+
+
 </script>
 
 <!-- Overlay de microfone estilo Claude -->
@@ -2376,6 +2865,51 @@ function _vcFalar(texto, onEnd) {
         <line x1="18" y1="6" x2="6" y2="18"/>
       </svg>
     </button>
+  </div>
+</div>
+
+
+<!-- ════════ PAINEL: PREÇOS DE MATERIAIS ════════ -->
+<div class="panel-full" id="pricing-panel">
+  <div class="panel-head">
+    <button class="panel-back" onclick="fecharPainelPrecos()" title="Voltar">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <div class="panel-title">⚙️ Preços de Materiais</div>
+  </div>
+  <div class="panel-body">
+    <div class="panel-hint">Cadastre o <b>custo</b> de cada material. O <b>Agente de Cotação</b> usa esta tabela para calcular o orçamento aplicando margem de <b>30%</b>. Salvo neste dispositivo.</div>
+    <div class="panel-toolbar">
+      <button class="btn-panel primary" onclick="abrirFormMat()">+ Novo material</button>
+      <button class="btn-panel ghost" onclick="resetarBOM()">Restaurar padrão</button>
+    </div>
+    <div id="mat-form-container"></div>
+    <div id="precos-lista"></div>
+  </div>
+</div>
+
+<!-- ════════ PAINEL: AGENTE DE COTAÇÃO VRF ════════ -->
+<div class="panel-full" id="cotacao-panel">
+  <div class="panel-head">
+    <button class="panel-back" onclick="fecharAgenteCotacao()" title="Voltar">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    </button>
+    <div class="panel-title">📋 Agente de Cotação VRF</div>
+  </div>
+  <div class="panel-body">
+    <div id="cot-intro">
+      <div class="panel-hint">Envie o <b>PDF do edital/memorial</b>. A Elite IA extrai os materiais, cruza com seus <b>preços cadastrados</b> e gera o orçamento com margem de <b>30%</b>.</div>
+      <div class="cot-dropzone" onclick="document.getElementById('cot-file-input').click()">
+        <svg width="34" height="34" fill="none" stroke="#3ab5cc" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <div class="dz-title">Enviar PDF do edital</div>
+        <div class="dz-sub">Toque para selecionar o arquivo</div>
+      </div>
+      <input type="file" id="cot-file-input" accept=".pdf" style="display:none" onchange="handleFileCotacao(this)"/>
+      <div class="cot-divider">ou</div>
+      <textarea id="cot-texto" placeholder="Cole aqui a lista de materiais ou um trecho do memorial descritivo..."></textarea>
+      <button class="btn-panel primary" style="width:100%" onclick="cotarPorTexto()">Gerar cotação do texto</button>
+    </div>
+    <div id="cot-result" class="cot-result"></div>
   </div>
 </div>
 
