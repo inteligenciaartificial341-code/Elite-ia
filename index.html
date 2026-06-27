@@ -1285,14 +1285,15 @@ let conversationHistory = [];
 const SYSTEM_PROMPT = `Você é a SONNAR IA, assistente especializada em licitações públicas de sistemas VRF (Variable Refrigerant Flow) e ar condicionado no Brasil, desenvolvida pela Elite AI — Soluções em Engenharia Térmica.
 
 Suas especialidades:
-- Busca e análise de editais de licitação (PNCP, ComprasNet, SisLog, Compras MG, Compras MT, e-Licitações)
+- Busca e análise de editais de licitação de VRF no PNCP (proposta aberta e que vão abrir), em todo o Brasil ou por estado
+- Análise de entrada no edital: data limite, proposta sugerida, documentação de habilitação e qualificação técnica
 - Extração de informações-chave: valor estimado, prazo, documentações exigidas, qualificação técnica e operacional
 - Cálculo de quantitativos de materiais VRF (tubulação de cobre, isolamento, suportes, etc.)
 - Análise de Termos de Referência
-- Orientação sobre habilitação jurídica, fiscal, técnica e econômica
+- Orientação sobre habilitação jurídica, fiscal, técnica e econômica (Lei 14.133/2021)
 - Comparação de propostas e estratégia de precificação
 
-Sempre responda em português brasileiro. Seja objetivo e técnico. Quando o usuário pedir busca de editais, informe que a busca automatizada está em desenvolvimento e oriente como acessar manualmente.
+Sempre responda em português brasileiro. Seja objetivo e técnico. A busca de editais e a análise de entrada já são automáticas no app — quando o usuário pedir, o sistema executa a busca no PNCP e monta a ficha de entrada. Se ele colar um número PNCP, o app abre a ficha daquele edital.
 
 Ao analisar PDFs, extraia: valor estimado, prazo de execução, documentações exigidas, qualificação técnica, capacidade operacional e resumo do Termo de Referência.`;
 
@@ -1360,6 +1361,13 @@ async function sendMessage() {
   if (!text) return;
   input.value = ''; input.style.height = 'auto';
   addMessage('user', text);
+
+  // Número PNCP colado → abre direto a Ficha de Entrada do edital
+  const pncpMatch = text.match(/\d{14}-\d+-\d+\/\d{4}/);
+  if (pncpMatch) {
+    await analisarEntradaEdital(pncpMatch[0]);
+    return;
+  }
 
   // Usar IA para interpretar a intenção — sem palavras-chave fixas
   const intencao = await interpretarIntencao(text);
@@ -1429,11 +1437,71 @@ async function handleFile(input) {
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
 const CORS_PROXY = 'https://corsproxy.io/?url=';
 
-const KEYWORDS_VRF = ['vrf', 'fluxo de refrigerante variável', 'fluxo de refrigerante variavel',
-  'ar condicionado', 'ar-condicionado', 'condicionador de ar', 'climatiz', 'split',
-  'sistema de refrigeração', 'sistema de refrigeracao', 'hvac', 'fancoil', 'fan coil',
-  'fan-coil', 'chiller', 'self contained', 'cassete', 'condensadora', 'evaporadora',
-  'multi split', 'multisplit'];
+// ════════════ FILTRO VRF — PRECISO (só obra de VRF, nunca conserto de ar) ════════════
+// Termos que identificam INEQUIVOCAMENTE um sistema VRF/VRV. Editais de VRF SEMPRE
+// trazem um destes no objeto (é especificação técnica obrigatória no Termo de Referência).
+// → Alta cobertura (não perde NENHUMA obra de VRF) + alta precisão (não pega conserto de
+//   ar de veículo, manutenção de split de janela, etc.).
+const VRF_TERMOS = [
+  'vrf', 'vrv',
+  'fluxo de refrigerante variavel', 'fluxo de refrigerante variável',
+  'volume de refrigerante variavel', 'volume de refrigerante variável',
+  'fluxo variavel de refrigerante', 'fluxo variável de refrigerante',
+  'vazao variavel de refrigerante', 'vazão variável de refrigerante',
+  'fluxo de refrigeracao variavel', 'fluxo de refrigeração variável'
+];
+
+// Contextos que NÃO são obra de VRF (conserto de ar de máquina/veículo). Descarta mesmo
+// se citar algo de climatização — é a fonte dos falsos positivos que apareciam antes.
+const VRF_EXCLUSOES = [
+  'motoniveladora', 'retroescavadeira', 'escavadeira', 'caminhao', 'caminhão',
+  'trator', 'onibus', 'ônibus', 'ambulancia', 'ambulância', 'veiculo', 'veículo',
+  'automotiv', 'pa carregadeira', 'pá carregadeira', 'empilhadeira', 'colheitadeira',
+  'rolo compactador', 'patrol', 'maquina pesada', 'máquina pesada'
+];
+
+// ── TIER 2 (opcional) — climatização predial de grande porte que PODE ser VRF mesmo sem
+//    citar "VRF". Só conta com verbo de obra + sem conserto + valor relevante. Vem DESLIGADO
+//    por padrão (máxima precisão). Para ampliar a busca, troque para true.
+const VRF_BUSCA_AMPLA = false;
+const CLIMA_PREDIAL = [
+  'sistema de climatizacao', 'sistema de climatização',
+  'central de ar condicionado', 'ar condicionado central',
+  'sistema de ar condicionado', 'climatizacao predial', 'climatização predial'
+];
+const VERBOS_OBRA = [
+  'instalacao', 'instalação', 'fornecimento e instalacao', 'fornecimento e instalação',
+  'implantacao', 'implantação', 'execucao', 'execução', 'modernizacao', 'modernização',
+  'substituicao do sistema', 'substituição do sistema'
+];
+const TERMOS_CONSERTO = [
+  'conserto', 'reparo', 'manutencao corretiva', 'manutenção corretiva',
+  'troca de compressor', 'recarga de gas', 'recarga de gás', 'higienizacao', 'higienização'
+];
+const VALOR_MIN_AMPLA = 20000; // R$ — piso para o tier 2 (sistema predial sério custa mais)
+
+// Decide se um edital é, de fato, obra de VRF.
+function _objetoEhVRF(item) {
+  const obj = (item.objetoCompra || '').toLowerCase();
+  if (!obj) return false;
+
+  const temVRF    = VRF_TERMOS.some(kw => obj.includes(kw));
+  const ehVeiculo = VRF_EXCLUSOES.some(kw => obj.includes(kw));
+
+  if (temVRF && !ehVeiculo) return true;   // ← caso principal: é VRF de verdade
+  if (temVRF &&  ehVeiculo) return false;  // cita VRF mas é veículo (raríssimo) → fora
+
+  // Tier 2 (só se ativado)
+  if (VRF_BUSCA_AMPLA && !ehVeiculo) {
+    const temClima   = CLIMA_PREDIAL.some(kw => obj.includes(kw));
+    const temObra    = VERBOS_OBRA.some(kw => obj.includes(kw));
+    const ehConserto = TERMOS_CONSERTO.some(kw => obj.includes(kw));
+    const valor      = Number(item.valorTotalEstimado) || 0;
+    const valorOk    = valor === 0 || valor >= VALOR_MIN_AMPLA; // valor desconhecido passa
+    if (temClima && temObra && !ehConserto && valorOk) return true;
+  }
+  return false;
+}
 
 async function fetchPNCP(url) {
   // Lista de estratégias de conexão, tentadas em ordem
@@ -1538,11 +1606,8 @@ async function buscarEditaisPNCP(uf, diasFuturos = 45) {
     }
   }
 
-  // Filtrar por palavras-chave VRF no objeto da compra
-  const filtrados = todos.filter(item => {
-    const obj = (item.objetoCompra || '').toLowerCase();
-    return KEYWORDS_VRF.some(kw => obj.includes(kw));
-  });
+  // Filtrar: manter SOMENTE obras de VRF (descarta conserto de ar de veículo/máquina)
+  const filtrados = todos.filter(_objetoEhVRF);
 
   // Remover duplicados por numeroControlePNCP
   const vistos = new Set();
@@ -1582,6 +1647,188 @@ function ordenarPorUrgencia(editais) {
   });
 }
 
+// ════════════ ANÁLISE DE ENTRADA NO EDITAL ════════════
+// Guarda os editais já vistos (da busca) para análise rápida por número.
+const _editaisEncontrados = {};
+
+// Quebra o número de controle PNCP: CNPJ(14)-1-SEQ(6)/ANO  ex: 01611538000103-1-000572/2026
+function _parsePNCP(numero) {
+  const m = String(numero || '').trim().match(/(\d{14})-(\d+)-(\d+)\/(\d{4})/);
+  if (!m) return null;
+  return { cnpj: m[1], ano: m[4], seq: parseInt(m[3], 10), seqRaw: m[3] };
+}
+
+function _fmtBRL(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Faixa de proposta competitiva a partir do valor de referência do edital.
+// Em licitação você lança ABAIXO do valor de referência do órgão para vencer no preço.
+function _calcularProposta(valorRef) {
+  const v = Number(valorRef) || 0;
+  if (v <= 0) return null;
+  return { ref: v, piso: v * 0.85, sugerida: v * 0.90, teto: v * 0.95 };
+}
+
+// Detalhe de um edital direto do PNCP (quando o número não veio de uma busca anterior).
+async function _fetchDetalhePNCP(p) {
+  const urls = [
+    `https://pncp.gov.br/api/pncp/v1/orgaos/${p.cnpj}/compras/${p.ano}/${p.seq}`,
+    `https://pncp.gov.br/api/consulta/v1/orgaos/${p.cnpj}/compras/${p.ano}/${p.seq}`
+  ];
+  for (const url of urls) {
+    try {
+      const json = await fetchPNCP(url);
+      if (json && (json.objetoCompra || json.numeroControlePNCP)) return json;
+    } catch (e) { /* tenta a próxima */ }
+  }
+  return null;
+}
+
+// Monta a "Ficha de Entrada": data limite, proposta sugerida, documentação,
+// qualificação técnica e link — tudo o que é preciso para entrar no edital.
+async function analisarEntradaEdital(numero) {
+  const container = document.getElementById('chat-messages');
+
+  // ── stream de "pensando" (mesmo visual da busca) ──
+  const wrap = document.createElement('div');
+  wrap.className = 'ts-wrap';
+  const shieldDiv = document.createElement('div');
+  shieldDiv.innerHTML = _buildTsShield();
+  const shieldEl = shieldDiv.firstElementChild;
+  wrap.appendChild(shieldEl);
+  const col = document.createElement('div');
+  col.className = 'ts-col';
+  col.innerHTML = '<div class="ts-label">SONNAR IA</div><div class="ts-msg"></div>';
+  wrap.appendChild(col);
+  container.appendChild(wrap);
+  container.scrollTop = container.scrollHeight;
+  const msgEl = col.querySelector('.ts-msg');
+  const setMsg = async (t) => {
+    msgEl.classList.add('fade'); await new Promise(r => setTimeout(r, 200));
+    msgEl.textContent = t; msgEl.classList.remove('fade');
+    container.scrollTop = container.scrollHeight;
+  };
+
+  await setMsg(`Abrindo edital ${numero}...`);
+
+  // 1) Obter o edital (da busca já feita, ou buscando o detalhe no PNCP)
+  let edital = _editaisEncontrados[numero];
+  const p = _parsePNCP(numero);
+  if (!edital && p) {
+    await setMsg('Consultando dados no PNCP...');
+    edital = await _fetchDetalhePNCP(p);
+  }
+  if (!edital) {
+    shieldEl.classList.add('done'); wrap.remove();
+    addMessage('assistant', `Não consegui localizar o edital <b>${numero}</b>. Confira o número PNCP (formato 00000000000000-1-000000/2026) ou rode a busca novamente.`);
+    return;
+  }
+
+  // 2) Dados estruturados
+  const objeto     = edital.objetoCompra || '—';
+  const valorRef   = edital.valorTotalEstimado;
+  const encerr     = edital.dataEncerramentoProposta ? new Date(edital.dataEncerramentoProposta) : null;
+  const abertura   = edital.dataAberturaProposta ? new Date(edital.dataAberturaProposta) : null;
+  const modalidade = edital.modalidadeNome || '—';
+  const orgao      = edital.unidadeOrgao?.nomeUnidade || edital.orgaoEntidade?.razaoSocial || '—';
+  const uf         = edital.unidadeOrgao?.ufSigla || '';
+  const municipio  = edital.unidadeOrgao?.municipioNome || '';
+  const link       = edital.linkSistemaOrigem || edital.linkProcessoEletronico || '#';
+  const prop       = _calcularProposta(valorRef);
+  const agora      = new Date();
+  const msDia      = 86400000;
+
+  // Prazo de entrada (data limite da proposta)
+  let prazoTxt = 'Não informado no PNCP — confira no edital';
+  let prazoCor = '#6b8a90';
+  if (encerr) {
+    const dias = Math.ceil((encerr - agora) / msDia);
+    const dataFmt = encerr.toLocaleDateString('pt-BR') + ' às ' + encerr.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    if (dias < 0)        { prazoTxt = `Encerrado em ${dataFmt}`; prazoCor = '#c0392b'; }
+    else if (dias === 0) { prazoTxt = `⚠️ ENCERRA HOJE — ${dataFmt}`; prazoCor = '#c0392b'; }
+    else if (dias === 1) { prazoTxt = `⚠️ Encerra AMANHÃ — ${dataFmt}`; prazoCor = '#d4860b'; }
+    else                 { prazoTxt = `${dataFmt}  ·  faltam ${dias} dias`; prazoCor = dias <= 3 ? '#d4860b' : '#1f7a4d'; }
+  } else if (abertura && abertura > agora) {
+    prazoTxt = `Propostas abrem em ${abertura.toLocaleDateString('pt-BR')}`;
+    prazoCor = '#d4860b';
+  }
+
+  // 3) IA: documentação de habilitação + qualificação técnica VRF (Lei 14.133/2021)
+  await setMsg('Levantando documentação e qualificação técnica...');
+  const promptIA = `Você é especialista em licitações públicas brasileiras (Lei 14.133/2021) e em sistemas de climatização VRF. Para o edital abaixo, liste de forma objetiva o que uma empresa precisa para PARTICIPAR e VENCER.
+
+OBJETO: ${objeto}
+MODALIDADE: ${modalidade}
+ÓRGÃO: ${orgao}${municipio ? ' — ' + municipio : ''}${uf ? '/' + uf : ''}
+VALOR DE REFERÊNCIA: ${valorRef ? _fmtBRL(valorRef) : 'não informado'}
+
+Responda em português brasileiro, direto, em tópicos curtos. Use exatamente estes blocos com título em **negrito**:
+**Habilitação Jurídica** (contrato social, etc.)
+**Regularidade Fiscal e Trabalhista** (CND Federal, FGTS, estadual, municipal, CNDT)
+**Qualificação Econômico-Financeira** (balanço, certidão de falência, capital/patrimônio mínimo quando exigido)
+**Qualificação Técnica para VRF** (atestado de capacidade técnica compatível, registro no CREA, ART/RRT, engenheiro mecânico responsável, e o que mais é típico em obra de VRF)
+**Estratégia de Proposta** (1-2 frases sobre preço diante do valor de referência)
+
+Importante: são requisitos TÍPICOS dessa modalidade — finalize com uma linha curta avisando que o edital deve ser conferido para exigências específicas. Não invente números de atestado nem percentuais que só o edital teria.`;
+
+  let analiseIA = '';
+  try {
+    const data = await callAnthropicAPI({ model: 'claude-sonnet-4-6', max_tokens: 900, messages: [{ role: 'user', content: promptIA }] });
+    analiseIA = data.content?.[0]?.text || '';
+  } catch (e) { analiseIA = ''; }
+
+  // 4) Encerrar stream e renderizar a ficha
+  shieldEl.classList.add('done');
+  msgEl.classList.add('fade');
+  await new Promise(r => setTimeout(r, 250));
+  wrap.remove();
+
+  let blocoProposta;
+  if (prop) {
+    blocoProposta = `
+      <div style="margin:4px 0 2px;"><b>Valor de referência (órgão):</b> ${_fmtBRL(prop.ref)}</div>
+      <div style="background:#e8f6ef;border:1px solid #aed8c4;border-radius:8px;padding:8px 10px;margin-top:6px;">
+        <div style="font-weight:700;color:#1f7a4d;margin-bottom:4px;">💰 Proposta sugerida</div>
+        <div style="font-size:18px;font-weight:800;color:#15633c;">${_fmtBRL(prop.sugerida)}</div>
+        <div style="font-size:12px;color:#3a6b54;margin-top:2px;">Faixa competitiva: ${_fmtBRL(prop.piso)} a ${_fmtBRL(prop.teto)}</div>
+        <div style="font-size:11px;color:#5a7d6c;margin-top:5px;">⚠️ Garanta que o valor cobre seu custo + margem de 30%. Em licitação, vence o menor preço dentro da habilitação.</div>
+      </div>`;
+  } else {
+    blocoProposta = `<div style="color:#6b8a90;"><b>Valor de referência:</b> não informado no PNCP. Abra o edital para definir o preço da proposta.</div>`;
+  }
+
+  const cabecalho = `
+    <div style="background:linear-gradient(135deg,#175165,#193844);border-radius:10px;padding:12px 14px;margin-top:10px;color:#eaf4f6;">
+      <div style="font-size:11px;letter-spacing:.5px;opacity:.75;text-transform:uppercase;">Ficha de entrada</div>
+      <div style="font-weight:700;font-size:13px;line-height:1.4;margin:4px 0 8px;">${objeto}</div>
+      <div style="font-size:12px;opacity:.9;">${orgao}${municipio ? ' · ' + municipio : ''}${uf ? '/' + uf : ''} · ${modalidade}</div>
+      <div style="font-size:11px;opacity:.7;margin-top:2px;">Nº PNCP: ${numero}</div>
+    </div>`;
+
+  const blocoPrazo = `
+    <div style="background:#fff;border:1px solid #d8e6ea;border-radius:10px;padding:12px 14px;margin-top:8px;">
+      <div style="font-weight:700;color:#11808c;margin-bottom:4px;">📅 Data de entrada (limite da proposta)</div>
+      <div style="font-weight:700;color:${prazoCor};font-size:14px;">${prazoTxt}</div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #eef3f5;">${blocoProposta}</div>
+    </div>`;
+
+  const blocoReq = analiseIA
+    ? `<div style="background:#f7fbfc;border:1px solid #d8e6ea;border-radius:10px;padding:12px 14px;margin-top:8px;font-size:13px;">
+         <div style="font-weight:700;color:#11808c;margin-bottom:6px;">📋 Documentação & Qualificação Técnica</div>
+         ${formatAIResponse(analiseIA)}
+       </div>`
+    : `<div style="background:#fff7ed;border:1px solid #f0d8b8;border-radius:10px;padding:12px 14px;margin-top:8px;font-size:13px;color:#7a5a2a;">
+         Não consegui gerar a lista de requisitos agora. Abra o edital pelo botão abaixo e, se quiser, me envie o PDF (📎) que eu extraio a documentação e qualificação técnica exatas.
+       </div>`;
+
+  const blocoLink = link !== '#'
+    ? `<div style="margin-top:8px;"><a href="${link}" target="_blank" style="display:inline-block;background:#1a5f6e;color:white;padding:8px 16px;border-radius:7px;text-decoration:none;font-size:13px;font-weight:600;">Abrir edital completo ↗</a></div>`
+    : '';
+
+  addMessage('assistant', cabecalho + blocoPrazo + blocoReq + blocoLink, true);
+}
+
 function formatarEdital(edital) {
   const valor = edital.valorTotalEstimado
     ? 'R$ ' + Number(edital.valorTotalEstimado).toLocaleString('pt-BR', {minimumFractionDigits:2})
@@ -1596,6 +1843,7 @@ function formatarEdital(edital) {
   const municipio = edital.unidadeOrgao?.municipioNome || '';
   const link = edital.linkSistemaOrigem || edital.linkProcessoEletronico || '#';
   const numero = edital.numeroControlePNCP || '—';
+  if (numero !== '—') _editaisEncontrados[numero] = edital; // guarda p/ análise de entrada
 
   // ── BADGE DE STATUS ──
   const status = edital._status || _statusEdital(edital);
@@ -1636,44 +1884,60 @@ function formatarEdital(edital) {
         <div style="grid-column:1/-1"><b>Órgão:</b> ${orgao}</div>
         <div style="grid-column:1/-1"><b>Nº PNCP:</b> ${numero}</div>
       </div>
-      ${link !== '#' ? `<a href="${link}" target="_blank" style="display:inline-block;background:#1a5f6e;color:white;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">Acessar edital ↗</a>` : '<span style="color:#888;font-size:12px">Link não disponível</span>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+        ${link !== '#' ? `<a href="${link}" target="_blank" style="display:inline-block;background:#1a5f6e;color:white;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">Acessar edital ↗</a>` : ''}
+        ${numero !== '—' ? `<button onclick="analisarEntradaEdital('${numero}')" style="display:inline-block;background:#11808c;color:white;padding:6px 14px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;">📋 Como entrar</button>` : ''}
+        ${link === '#' && numero === '—' ? '<span style="color:#888;font-size:12px">Link não disponível</span>' : ''}
+      </div>
     </div>`;
 }
 
-// Detecta UF no comando — sigla, nome completo ou sigla isolada
+// Detecta o alvo da busca: estado específico (sigla UF) ou Brasil inteiro ('').
+// Brasil inteiro (padrão): BR, BRA, BRASIL, PAÍS, PAIS, PA, NACIONAL, "todo o Brasil"...
+// Estado: nome completo (Bahia) ou sigla (BA, "em SP", "/RJ").
 function detectarUF(comando) {
   const texto = comando.toUpperCase().trim();
 
+  // ── BUSCA NACIONAL → '' (sem filtro de UF: traz todos os estados) ──
+  const NACIONAL = ['BRASIL', 'BRA', 'PAÍS', 'PAIS', 'NACIONAL',
+    'TODO O BRASIL', 'TODO BRASIL', 'TODOS OS ESTADOS', 'TODO O PAÍS', 'TODO O PAIS',
+    'TODO PAÍS', 'TODO PAIS', 'EM TODO BRASIL', 'NO BRASIL INTEIRO', 'BRASIL INTEIRO'];
+  for (const n of NACIONAL) {
+    if (texto.includes(n)) return '';
+  }
+  // "BR" e "PA" isolados também = nacional (definição do Paulo). "PARÁ" (com acento) = estado.
+  if (/(^|\s)(BR|PA)($|\s)/.test(texto) && !/PARÁ\b/.test(texto)) return '';
+
+  // ── ESTADO por nome completo (inclui PARÁ acentuado) ──
   const nomes = {
-    'MATO GROSSO DO SUL':'MS','RIO GRANDE DO NORTE':'RN','RIO GRANDE DO SUL':'RS',
-    'RIO DE JANEIRO':'RJ','DISTRITO FEDERAL':'DF','ESPIRITO SANTO':'ES','ESPÍRITO SANTO':'ES',
-    'SANTA CATARINA':'SC','MINAS GERAIS':'MG','MATO GROSSO':'MT','SAO PAULO':'SP','SÃO PAULO':'SP',
-    'MARANHAO':'MA','MARANHÃO':'MA','PARAIBA':'PB','PARAÍBA':'PB','RONDONIA':'RO','RONDÔNIA':'RO',
-    'TOCANTINS':'TO','RORAIMA':'RR','AMAZONAS':'AM','SERGIPE':'SE','ALAGOAS':'AL','PIAUI':'PI','PIAUÍ':'PI',
-    'PARANA':'PR','PARANÁ':'PR','PERNAMBUCO':'PE','GOIAS':'GO','GOIÁS':'GO','CEARA':'CE','CEARÁ':'CE',
-    'BAHIA':'BA','AMAPA':'AP','AMAPÁ':'AP','ACRE':'AC','PARA':'PA','PARÁ':'PA'
+    'RIO GRANDE DO SUL':'RS','RIO GRANDE DO NORTE':'RN','MATO GROSSO DO SUL':'MS',
+    'RIO DE JANEIRO':'RJ','DISTRITO FEDERAL':'DF','ESPÍRITO SANTO':'ES','ESPIRITO SANTO':'ES',
+    'SANTA CATARINA':'SC','MINAS GERAIS':'MG','MATO GROSSO':'MT','SÃO PAULO':'SP','SAO PAULO':'SP',
+    'MARANHÃO':'MA','MARANHAO':'MA','PARAÍBA':'PB','PARAIBA':'PB','RONDÔNIA':'RO','RONDONIA':'RO',
+    'TOCANTINS':'TO','RORAIMA':'RR','AMAZONAS':'AM','SERGIPE':'SE','ALAGOAS':'AL','PIAUÍ':'PI','PIAUI':'PI',
+    'PARANÁ':'PR','PARANA':'PR','PERNAMBUCO':'PE','GOIÁS':'GO','GOIAS':'GO','CEARÁ':'CE','CEARA':'CE',
+    'BAHIA':'BA','AMAPÁ':'AP','AMAPA':'AP','ACRE':'AC','PARÁ':'PA'
   };
   for (const nome of Object.keys(nomes)) {
     if (texto.includes(nome)) return nomes[nome];
   }
 
-  const ufs = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+  // ── SIGLA com preposição ou barra (EM SP, NO RJ, /BA, UF: GO) ── (PA já tratado acima)
+  const ufs = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
   for (const uf of ufs) {
     if (new RegExp(`\\b(EM|NO|NA|DE|UF:?)\\s+${uf}\\b`).test(texto)) return uf;
     if (new RegExp(`/${uf}\\b`).test(texto)) return uf;
   }
-
-  const excluir = ['PAIS','PAÍS','ESTA','ESTE','ESSA','PARA','MAIS','DICA'];
+  // ── SIGLA isolada (evitando palavras comuns que contêm a sigla) ──
+  const excluir = ['ESTA','ESTE','ESSA','MAIS','DICA','SEM','COM','POR','SUA','MEU','SE','SAO'];
   for (const uf of ufs) {
     if (new RegExp(`(^|\\s)${uf}($|\\s)`).test(texto)) {
       let falso = false;
-      for (const ex of excluir) {
-        if (ex.includes(uf) && texto.includes(ex)) falso = true;
-      }
+      for (const ex of excluir) if (ex.includes(uf) && texto.includes(ex)) falso = true;
       if (!falso) return uf;
     }
   }
-  return '';
+  return ''; // padrão: Brasil inteiro
 }
 
 const BUSCA_TRIGGERS = [
@@ -2040,9 +2304,9 @@ async function interpretarIntencao(texto) {
 Mensagem do usuário: "${texto.replace(/"/g, "'")}"
 
 Regras:
-- "ehBusca": true se o usuário quer buscar/pesquisar/encontrar/ver editais, licitações, processos, propostas ou contratos de VRF/ar condicionado/climatização/refrigeração (inclui "tem licitação aberta?", "quais editais estão abertos?", "me mostra editais")
+- "ehBusca": true se o usuário quer buscar/pesquisar/encontrar/ver editais, licitações, processos, propostas ou contratos de VRF (inclui "tem licitação aberta?", "quais editais estão abertos?", "me mostra editais", "buscar VRF na Bahia")
 - "ehBusca": false se é pergunta técnica, dúvida, explicação, qualificação, documentação, análise de PDF, ou outro assunto
-- Se houver estado/UF brasileiro, coloque a sigla em "uf" (ex: "GO", "SP", "BA"); senão deixe "" (busca nacional)
+- "uf": se houver um ESTADO específico, coloque a sigla (ex: "SP", "BA", "MG", "RS"). Se o usuário disser Brasil, país, nacional, todo o Brasil, BR, PA, ou NÃO citar estado nenhum, deixe "" (busca nacional — este é o padrão)
 - Considere o contexto: se o usuário estava buscando e pede "agora em GO" ou "e em SP?", é continuação da busca
 
 Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou ""}`;
@@ -2057,7 +2321,14 @@ Responda APENAS com: {"ehBusca": true/false, "uf": "XX" ou ""}`;
     const parsed = JSON.parse(raw);
 
     if (parsed.ehBusca) {
-      if (!parsed.uf && _ultimoContexto === 'busca' && _ultimaUF) parsed.uf = _ultimaUF;
+      // detectarUF é a autoridade (trata nacional, BR/PA, nomes completos, "/BA", etc.)
+      let uf = detectarUF(texto);
+      // Só usa a UF da IA se a regra não achou estado E a IA devolveu sigla válida (não nacional)
+      if (!uf && parsed.uf && /^[A-Z]{2}$/.test(parsed.uf) && parsed.uf !== 'BR' && parsed.uf !== 'PA') {
+        uf = parsed.uf;
+      }
+      if (!uf && _ultimoContexto === 'busca' && _ultimaUF) uf = _ultimaUF;
+      parsed.uf = uf;
     }
     return parsed;
 
