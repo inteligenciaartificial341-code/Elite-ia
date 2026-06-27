@@ -1025,6 +1025,41 @@
 .composer-credit b{font-weight:700}
 .panel-credit{text-align:center;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:.5px;padding:18px 0 26px}
 .panel-credit b{color:rgba(255,255,255,0.45);font-weight:600}
+
+/* ════════ PAINEL DE FILTROS ════════ */
+.filtro-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);display:none;z-index:2000;align-items:flex-end;justify-content:center;}
+.filtro-overlay.open{display:flex;}
+.filtro-modal{width:100%;max-width:560px;max-height:90vh;background:linear-gradient(160deg,#1b3a45,#161d24);border-radius:18px 18px 0 0;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,0.55);animation:filtroUp .26s ease;}
+@keyframes filtroUp{from{transform:translateY(50px);opacity:.5}to{transform:translateY(0);opacity:1}}
+.filtro-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.1);color:#fff;font-weight:700;font-size:16px;flex-shrink:0;}
+.filtro-close{background:rgba(255,255,255,0.1);border:none;color:#fff;width:30px;height:30px;border-radius:50%;font-size:14px;cursor:pointer;}
+.filtro-body{overflow-y:auto;padding:14px 18px;flex:1;-webkit-overflow-scrolling:touch;}
+.filtro-sec{margin-bottom:18px;}
+.filtro-sec-title{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--teal-glow);margin-bottom:6px;}
+.filtro-hint{font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:8px;}
+.filtro-chips{display:flex;flex-wrap:wrap;gap:8px;}
+.fchip{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#dbe9ee;padding:8px 14px;border-radius:20px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.fchip.small{padding:6px 11px;font-size:12px;}
+.fchip.on{background:linear-gradient(135deg,var(--teal-light),var(--teal-glow));border-color:var(--teal-glow);color:#fff;font-weight:600;}
+.filtro-preco-row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:11px 14px;}
+.filtro-preco-row span{color:#9fc0c9;font-weight:600;}
+.filtro-preco-row input{flex:1;background:none;border:none;color:#fff;font-size:17px;font-weight:700;outline:none;font-family:inherit;}
+.filtro-preco-msg{font-size:11px;color:#7fae9a;margin:7px 2px 0;}
+.filtro-preco-msg.erro{color:#ffae5c;}
+.filtro-preco-presets{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}
+.filtro-allstates{display:flex;align-items:center;gap:8px;color:#dbe9ee;font-size:14px;margin-bottom:8px;cursor:pointer;}
+.filtro-regioes{display:flex;flex-direction:column;gap:6px;}
+.freg{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;overflow:hidden;}
+.freg-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;}
+.freg-check{display:flex;align-items:center;gap:8px;color:#eaf4f6;font-size:14px;font-weight:600;cursor:pointer;}
+.freg-exp{background:none;border:none;color:#9fc0c9;font-size:14px;cursor:pointer;padding:4px 10px;}
+.freg-ufs{padding:2px 12px 12px;grid-template-columns:1fr 1fr;gap:7px 10px;}
+.fuf{display:flex;align-items:center;gap:6px;color:#cfe0e5;font-size:12.5px;cursor:pointer;}
+.filtro-footer{display:flex;gap:10px;padding:13px 18px;border-top:1px solid rgba(255,255,255,0.1);flex-shrink:0;}
+.filtro-btn-clear{flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#dbe9ee;padding:13px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+.filtro-btn-go{flex:2;background:linear-gradient(135deg,var(--teal-light),var(--teal-glow));border:none;color:#fff;padding:13px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.filtro-overlay input[type=checkbox]{accent-color:var(--teal-glow);width:16px;height:16px;}
+.btn-fav.salvo{background:#cfe8d4 !important;color:#1f7a4d !important;border-color:#a9d6b4 !important;}
 </style>
 </head>
 <body>
@@ -1174,8 +1209,8 @@
       Pesquise editais, analise documentos ou tire dúvidas.
     </div>
     <div class="quick-actions">
-      <button class="quick-action" onclick="sendQuick('Buscar editais VRF com proposta aberta agora')">
-        <span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>Buscar editais VRF
+      <button class="quick-action" onclick="abrirFiltrosBusca()">
+        <span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>Buscar editais
       </button>
     </div>
   </div>
@@ -1309,7 +1344,7 @@ function resetMessages() {
       Pesquise editais, analise documentos ou tire dúvidas.
     </div>
     <div class="quick-actions">
-      <button class="quick-action" onclick="sendQuick('Buscar editais VRF com proposta aberta agora')"><span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>Buscar editais VRF</button>
+      <button class="quick-action" onclick="abrirFiltrosBusca()"><span class="qa-icon"><svg width="22" height="22" fill="none" stroke="white" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>Buscar editais</button>
     </div>`;
 }
 
@@ -1501,6 +1536,410 @@ function _objetoEhVRF(item) {
     if (temClima && temObra && !ehConserto && valorOk) return true;
   }
   return false;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  FILTROS AVANÇADOS DE BUSCA (tipo de sistema, preço, estado, etc.)
+// ════════════════════════════════════════════════════════════════
+
+// ── Classificador de TIPO DE SISTEMA (um edital pode bater em mais de um) ──
+const TIPOS_SISTEMA = {
+  vrf:     ['vrf','vrv','fluxo de refrigerante variavel','fluxo de refrigerante variável',
+            'volume de refrigerante variavel','volume de refrigerante variável',
+            'fluxo variavel de refrigerante','fluxo variável de refrigerante'],
+  chiller: ['chiller','agua gelada','água gelada','resfriador de liquido','resfriador de líquido',
+            'fan coil','fan-coil','fancoil'],
+  splitao: ['splitao','splitão','split piso teto','piso teto','piso-teto','cassete','cassette',
+            'multi split','multisplit','multi-split','self contained','self-contained','selfcontained',
+            'split duto','split de duto'],
+  split:   ['split','hi wall','hi-wall','hiwall','mini split','minisplit','ar condicionado split'],
+  hvac:    ['hvac','climatizacao','climatização','sistema de climatizacao','sistema de climatização',
+            'central de ar','ar condicionado central']
+};
+const TIPO_ROTULO = { vrf:'VRF', split:'Split', splitao:'Splitão', chiller:'Chiller', hvac:'HVAC' };
+
+function _classificarSistema(item) {
+  const obj = (item.objetoCompra || '').toLowerCase();
+  const tipos = [];
+  for (const [tipo, kws] of Object.entries(TIPOS_SISTEMA)) {
+    if (kws.some(kw => obj.includes(kw))) tipos.push(tipo);
+  }
+  return tipos;
+}
+function _ehExcluidoVeiculo(item) {
+  const obj = (item.objetoCompra || '').toLowerCase();
+  return VRF_EXCLUSOES.some(kw => obj.includes(kw));
+}
+
+// ── Regiões → estados ──
+const REGIOES = {
+  'Norte':        ['AC','AP','AM','PA','RO','RR','TO'],
+  'Nordeste':     ['AL','BA','CE','MA','PB','PE','PI','RN','SE'],
+  'Centro-Oeste': ['DF','GO','MT','MS'],
+  'Sudeste':      ['ES','MG','RJ','SP'],
+  'Sul':          ['PR','RS','SC']
+};
+const UF_NOMES = {AC:'Acre',AL:'Alagoas',AP:'Amapá',AM:'Amazonas',BA:'Bahia',CE:'Ceará',
+  DF:'Distrito Federal',ES:'Espírito Santo',GO:'Goiás',MA:'Maranhão',MT:'Mato Grosso',
+  MS:'Mato Grosso do Sul',MG:'Minas Gerais',PA:'Pará',PB:'Paraíba',PR:'Paraná',PE:'Pernambuco',
+  PI:'Piauí',RJ:'Rio de Janeiro',RN:'Rio Grande do Norte',RS:'Rio Grande do Sul',RO:'Rondônia',
+  RR:'Roraima',SC:'Santa Catarina',SP:'São Paulo',SE:'Sergipe',TO:'Tocantins'};
+
+// ── Classificadores auxiliares ──
+function _classModalidade(nome) {
+  const n = (nome||'').toLowerCase();
+  if (n.includes('pregão')||n.includes('pregao')) return 'pregao';
+  if (n.includes('concorrência')||n.includes('concorrencia')) return 'concorrencia';
+  if (n.includes('dispensa')) return 'dispensa';
+  if (n.includes('inexig')) return 'inexigibilidade';
+  return 'outro';
+}
+function _tipoOrgao(item) {
+  const nome = ((item.orgaoEntidade?.razaoSocial || '') + ' ' + (item.unidadeOrgao?.nomeUnidade || '')).toLowerCase();
+  if (/prefeitura|municipal|munic[ií]pio/.test(nome)) return 'municipal';
+  if (/governo do estado|secretaria de estado|estadual|companhia|sabesp|cemig|copel/.test(nome)) return 'estadual';
+  if (/federal|uni[ãa]o|minist[ée]rio|universidade federal|instituto federal/.test(nome)) return 'federal';
+  if (/autarquia|empresa p[úu]blica|funda[çc][ãa]o|conselho|crea|cau|tribunal|tre|trf|trt|sesc|senac|sesi|senai|correios/.test(nome)) return 'autarquia';
+  return 'outro';
+}
+
+// ── Estado dos filtros (sessionStorage: zera só quando fecha a aba 100%) ──
+const FILTROS_KEY = 'sonnar_filtros_busca_v1';
+const FILTROS_PADRAO = {
+  tipos: ['vrf'],
+  precoMin: 500000,
+  estados: [],          // [] = todos os estados
+  modalidades: ['pregao','concorrencia','dispensa'],
+  status: ['aberto','7dias','30dias'],
+  orgaos: ['municipal','estadual','federal','autarquia','outro']
+};
+function carregarFiltros() {
+  try { const r = JSON.parse(sessionStorage.getItem(FILTROS_KEY)); if (r) return {...FILTROS_PADRAO, ...r}; } catch(e){}
+  return JSON.parse(JSON.stringify(FILTROS_PADRAO));
+}
+function salvarFiltros(f) { try { sessionStorage.setItem(FILTROS_KEY, JSON.stringify(f)); } catch(e){} }
+let _filtros = carregarFiltros();
+
+// ── Favoritos (localStorage: persiste de verdade) ──
+const FAVORITOS_KEY = 'sonnar_favoritos_v1';
+function getFavoritos(){ try{ return JSON.parse(localStorage.getItem(FAVORITOS_KEY))||{}; }catch(e){ return {}; } }
+function toggleFavorito(numero, btn){
+  const f = getFavoritos();
+  if (f[numero]) { delete f[numero]; if(btn){ btn.textContent='⭐ Salvar'; btn.classList.remove('salvo'); } }
+  else {
+    const e = _editaisEncontrados[numero] || {};
+    f[numero] = { num:numero, objeto:e.objetoCompra||'', valor:e.valorTotalEstimado||null, ts:Date.now() };
+    if(btn){ btn.textContent='✅ Salvo'; btn.classList.add('salvo'); }
+  }
+  try { localStorage.setItem(FAVORITOS_KEY, JSON.stringify(f)); } catch(e){}
+}
+
+// ── Normaliza item da Busca textual do PNCP → formato padrão de edital ──
+function _normalizarItemBusca(it) {
+  const g = (...keys) => { for (const k of keys){ const v=it[k]; if (v!==undefined && v!==null && v!=='') return v; } return undefined; };
+  const objeto = g('objetoCompra','description','objeto','ementa','title','descricaoCompleta','texto') || '';
+  const numero = g('numeroControlePNCP','numero_controle_pncp','numeroControlePncp','id') || '';
+  const valor  = g('valorTotalEstimado','valor_global','valorGlobal','valor','valorEstimado');
+  const dtAb   = g('dataAberturaProposta','data_inicio_vigencia','dataInicioVigencia','data_abertura_proposta');
+  const dtEn   = g('dataEncerramentoProposta','data_fim_vigencia','dataFimVigencia','data_encerramento_proposta');
+  const uf     = g('uf','ufSigla','estado_sigla','sigla_uf','unidadeUf');
+  const munic  = g('municipio_nome','municipioNome','municipio','nomeMunicipio');
+  const orgao  = g('orgao_nome','orgaoNome','razaoSocial','nomeOrgao','orgaoRazaoSocial');
+  const unidade= g('unidade_nome','unidadeNome','nomeUnidade');
+  const modal  = g('modalidade_licitacao_nome','modalidadeNome','modalidade','modalidadeLicitacaoNome');
+  let link = g('item_url','itemUrl','link','linkSistemaOrigem','urlItem') || '';
+  if (link && link.startsWith('/')) link = 'https://pncp.gov.br' + link;
+  return {
+    objetoCompra: objeto, numeroControlePNCP: numero, valorTotalEstimado: valor,
+    dataAberturaProposta: dtAb, dataEncerramentoProposta: dtEn, modalidadeNome: modal,
+    unidadeOrgao: { ufSigla: uf, municipioNome: munic, nomeUnidade: unidade },
+    orgaoEntidade: { razaoSocial: orgao }, linkSistemaOrigem: link, _fonte:'busca'
+  };
+}
+
+// ── Busca textual no PNCP (a mesma busca do site do PNCP — server-side por palavra) ──
+const QUERY_POR_TIPO = { vrf:'VRF', chiller:'chiller', splitao:'cassete', split:'split', hvac:'climatização' };
+async function buscarPNCPPorTexto(query, maxPaginas) {
+  maxPaginas = maxPaginas || 3;
+  let todos = [], pagina = 1, totalPag = 1;
+  while (pagina <= totalPag && pagina <= maxPaginas) {
+    const url = `https://pncp.gov.br/api/search/?q=${encodeURIComponent(query)}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=20`;
+    let json;
+    try { json = await fetchPNCP(url); } catch(e){ break; }
+    const items = json.items || json.data || json.resultado || json.registros || [];
+    if (!items.length) break;
+    todos = todos.concat(items.map(_normalizarItemBusca));
+    const total = json.total || json.totalRegistros || json.totalElements || items.length;
+    totalPag = Math.max(1, Math.ceil(total / 20));
+    pagina++;
+  }
+  return todos;
+}
+
+// ── Aplica TODOS os filtros do usuário sobre a lista bruta ──
+function _aplicarFiltrosLocais(lista, f) {
+  const tiposSel  = new Set(f.tipos && f.tipos.length ? f.tipos : ['vrf']);
+  const estadosSel= f.estados && f.estados.length ? new Set(f.estados) : null; // null = todos
+  const modaisSel = new Set(f.modalidades || []);
+  const statusSel = new Set(f.status || []);
+  const orgaosSel = new Set(f.orgaos || []);
+  const precoMin  = Math.max(500000, Number(f.precoMin) || 0);
+  const agora = new Date(), msDia = 86400000;
+  const vistos = new Set(), out = [];
+
+  for (const e of lista) {
+    if (_ehExcluidoVeiculo(e)) continue;
+    const tipos = _classificarSistema(e);
+    if (!tipos.some(t => tiposSel.has(t))) continue;                    // TIPO (OR dentro da categoria)
+    const uf = (e.unidadeOrgao?.ufSigla || '').toUpperCase();
+    if (estadosSel && !estadosSel.has(uf)) continue;                    // ESTADO
+    const v = Number(e.valorTotalEstimado) || 0;
+    if (v > 0 && v < precoMin) continue;                                // PREÇO (valor desconhecido passa)
+    if (modaisSel.size && !modaisSel.has(_classModalidade(e.modalidadeNome))) continue;  // MODALIDADE
+    const st = _statusEdital(e);
+    if (st === 'encerrado') continue;
+    if (statusSel.size && !_statusBate(e, st, statusSel, agora, msDia)) continue;          // STATUS
+    if (orgaosSel.size && !orgaosSel.has(_tipoOrgao(e))) continue;       // ÓRGÃO
+    const id = e.numeroControlePNCP || JSON.stringify(e);
+    if (vistos.has(id)) continue;
+    vistos.add(id);
+    e._status = st;
+    out.push(e);
+  }
+  return out;
+}
+function _statusBate(e, st, statusSel, agora, msDia) {
+  if (st === 'aberto') return statusSel.has('aberto');
+  if (st === 'futuro') {
+    const ab = e.dataAberturaProposta ? new Date(e.dataAberturaProposta) : null;
+    const dias = ab ? Math.ceil((ab - agora) / msDia) : 999;
+    if (statusSel.has('30dias') && dias <= 30) return true;
+    if (statusSel.has('7dias')  && dias <= 7)  return true;
+    if (statusSel.has('3dias')  && dias <= 3)  return true;
+    return false;
+  }
+  return false;
+}
+function _resumoFiltros(f) {
+  const tipos = (f.tipos||[]).map(t=>TIPO_ROTULO[t]||t).join(', ') || '—';
+  const est = (f.estados && f.estados.length) ? f.estados.join(', ') : 'Todos os estados';
+  return `${tipos} · valor ≥ ${_fmtBRL(Math.max(500000, f.precoMin||0))} · ${est}`;
+}
+
+// ── Stream de "pensando" reutilizável ──
+function _thinkingStream() {
+  const container = document.getElementById('chat-messages');
+  const wrap = document.createElement('div'); wrap.className = 'ts-wrap';
+  const sd = document.createElement('div'); sd.innerHTML = _buildTsShield();
+  const shieldEl = sd.firstElementChild; wrap.appendChild(shieldEl);
+  const col = document.createElement('div'); col.className = 'ts-col';
+  col.innerHTML = '<div class="ts-label">SONNAR IA</div><div class="ts-msg"></div>';
+  wrap.appendChild(col); container.appendChild(wrap);
+  container.scrollTop = container.scrollHeight;
+  const msgEl = col.querySelector('.ts-msg');
+  return {
+    setMsg: async (t) => { msgEl.classList.add('fade'); await new Promise(r=>setTimeout(r,200)); msgEl.textContent=t; msgEl.classList.remove('fade'); container.scrollTop=container.scrollHeight; },
+    finish: async () => { shieldEl.classList.add('done'); msgEl.classList.add('fade'); await new Promise(r=>setTimeout(r,250)); wrap.remove(); }
+  };
+}
+
+// ── Executor da busca COM filtros ──
+async function executarBuscaComFiltros(f) {
+  _ultimoContexto = 'busca';
+  const ts = _thinkingStream();
+  await ts.setMsg('Aplicando filtros e acessando o PNCP...');
+
+  let brutos = [];
+  const tipos = (f.tipos && f.tipos.length) ? f.tipos : ['vrf'];
+  for (const t of tipos) {
+    const q = QUERY_POR_TIPO[t] || t;
+    await ts.setMsg(`Procurando "${q}" em todo o Brasil...`);
+    try { brutos = brutos.concat(await buscarPNCPPorTexto(q, 3)); } catch(e){}
+  }
+
+  // Fallback: se a busca textual falhar, usa o método por modalidade (VRF)
+  if (brutos.length === 0) {
+    await ts.setMsg('Consultando base alternativa do PNCP...');
+    try { brutos = await buscarEditaisPNCP(''); } catch(e){ brutos = []; }
+  }
+
+  await ts.setMsg('Filtrando e organizando resultados...');
+  const filtrados = _aplicarFiltrosLocais(brutos, f);
+  await ts.finish();
+
+  if (filtrados.length === 0) {
+    addMessage('assistant', `Nenhum edital encontrado com esses filtros no momento.<br><span style="font-size:12px;color:#6b8a90;">${_resumoFiltros(f)}</span><br><br>Dica: reduza o valor mínimo, marque mais tipos de sistema (Split, Chiller…) ou amplie os estados.`);
+    return;
+  }
+
+  const ordenados = ordenarPorUrgencia(filtrados);
+  const abertos = ordenados.filter(e => (e._status||_statusEdital(e))==='aberto');
+  const futuros = ordenados.filter(e => (e._status||_statusEdital(e))==='futuro');
+  const top = ordenados.slice(0, 25);
+  let out = `<strong>📋 ${filtrados.length} edital(is) — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
+  out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">${_resumoFiltros(f)}</div>`;
+  for (const e of top) out += formatarEdital(e);
+  if (filtrados.length > top.length) out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${filtrados.length}.</div>`;
+  addMessage('assistant', out, true);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PAINEL DE FILTROS — interface
+// ════════════════════════════════════════════════════════════════
+const OPCOES_TIPOS  = [['vrf','VRF'],['split','Split'],['splitao','Splitão'],['chiller','Chiller'],['hvac','HVAC']];
+const OPCOES_MODAL  = [['pregao','Pregão Eletrônico'],['concorrencia','Concorrência'],['dispensa','Dispensa'],['inexigibilidade','Inexigibilidade']];
+const OPCOES_STATUS = [['aberto','Aberto agora'],['3dias','Abre em 3 dias'],['7dias','Abre em 7 dias'],['30dias','Abre em 30 dias']];
+const OPCOES_ORGAO  = [['municipal','Prefeitura'],['estadual','Estadual'],['federal','Federal'],['autarquia','Autarquia/Conselho'],['outro','Outro']];
+const PRESETS_PRECO = [500000,600000,700000,800000,1000000,2000000];
+
+function abrirFiltrosBusca() {
+  _filtros = carregarFiltros();
+  _renderFiltros();
+  document.getElementById('filtro-overlay').classList.add('open');
+}
+function fecharFiltros(e) {
+  if (e && e.target && e.target.id !== 'filtro-overlay' && !e.target.classList.contains('filtro-close')) return;
+  document.getElementById('filtro-overlay').classList.remove('open');
+}
+function _renderFiltros() {
+  _renderChips('filtro-tipos', OPCOES_TIPOS, 'tipos');
+  _renderChips('filtro-modalidades', OPCOES_MODAL, 'modalidades');
+  _renderChips('filtro-status', OPCOES_STATUS, 'status');
+  _renderChips('filtro-orgaos', OPCOES_ORGAO, 'orgaos');
+  _renderPrecoPresets();
+  const inp = document.getElementById('filtro-preco'); if(inp) inp.value = _fmtNum(_filtros.precoMin);
+  _validarPreco();
+  _renderRegioes();
+  _syncTodosEstados();
+}
+function _renderChips(id, opcoes, key) {
+  const el = document.getElementById(id); if(!el) return;
+  const sel = new Set(_filtros[key]||[]);
+  el.innerHTML = opcoes.map(([v,label]) =>
+    `<button type="button" class="fchip ${sel.has(v)?'on':''}" onclick="_toggleChip('${key}','${v}',this)">${label}</button>`
+  ).join('');
+}
+function _toggleChip(key, val, btn) {
+  const arr = new Set(_filtros[key]||[]);
+  if (arr.has(val)) arr.delete(val); else arr.add(val);
+  _filtros[key] = [...arr];
+  if (btn) btn.classList.toggle('on');
+  salvarFiltros(_filtros);
+}
+function _renderPrecoPresets() {
+  const el = document.getElementById('filtro-preco-presets'); if(!el) return;
+  el.innerHTML = PRESETS_PRECO.map(v =>
+    `<button type="button" class="fchip small ${Number(_filtros.precoMin)===v?'on':''}" onclick="_setPreco(${v})">${_rotuloPreco(v)}</button>`
+  ).join('');
+}
+function _rotuloPreco(v){ return v>=1000000 ? ('≥ '+(v/1000000)+'mi') : ('≥ '+(v/1000)+'k'); }
+function _setPreco(v) {
+  _filtros.precoMin = v;
+  const inp = document.getElementById('filtro-preco'); if(inp) inp.value = _fmtNum(v);
+  _validarPreco(); _renderPrecoPresets(); salvarFiltros(_filtros);
+}
+function onPrecoInput() {
+  const inp = document.getElementById('filtro-preco');
+  const raw = inp.value.replace(/\D/g,'');
+  const v = raw ? parseInt(raw,10) : 0;
+  _filtros.precoMin = v;
+  inp.value = v ? _fmtNum(v) : '';
+  _validarPreco(); _renderPrecoPresets(); salvarFiltros(_filtros);
+}
+function _validarPreco() {
+  const msg = document.getElementById('filtro-preco-msg'); if(!msg) return;
+  const v = Number(_filtros.precoMin)||0;
+  if (v < 500000) { msg.textContent = '⚠️ Valor mínimo exigido: R$ 500.000,00'; msg.classList.add('erro'); }
+  else { msg.textContent = `Buscando editais a partir de ${_fmtBRL(v)}`; msg.classList.remove('erro'); }
+}
+function _fmtNum(v){ return Number(v||0).toLocaleString('pt-BR'); }
+
+function _renderRegioes() {
+  const el = document.getElementById('filtro-regioes'); if(!el) return;
+  const sel = new Set(_filtros.estados||[]);
+  let html = '';
+  for (const [regiao, ufs] of Object.entries(REGIOES)) {
+    const todos = ufs.every(u=>sel.has(u));
+    html += `<div class="freg">
+      <div class="freg-head">
+        <label class="freg-check"><input type="checkbox" ${todos?'checked':''} onchange="_toggleRegiao('${regiao}')"> ${regiao} <span style="opacity:.6;font-weight:400;font-size:11px;">(${ufs.length})</span></label>
+        <button type="button" class="freg-exp" onclick="_toggleExpRegiao('${regiao}')">▾</button>
+      </div>
+      <div class="freg-ufs" id="freg-${regiao}" style="display:none;">
+        ${ufs.map(u=>`<label class="fuf"><input type="checkbox" ${sel.has(u)?'checked':''} onchange="_toggleUF('${u}')"> ${u} · ${UF_NOMES[u]}</label>`).join('')}
+      </div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+function _toggleExpRegiao(r){ const e=document.getElementById('freg-'+r); if(e) e.style.display = e.style.display==='none'?'grid':'none'; }
+function _toggleRegiao(r){
+  const sel = new Set(_filtros.estados||[]);
+  const ufs = REGIOES[r];
+  const todos = ufs.every(u=>sel.has(u));
+  if (todos) ufs.forEach(u=>sel.delete(u)); else ufs.forEach(u=>sel.add(u));
+  _filtros.estados = [...sel];
+  salvarFiltros(_filtros);
+  const abertos = [...document.querySelectorAll('.freg-ufs')].filter(e=>e.style.display!=='none').map(e=>e.id);
+  _renderRegioes(); _syncTodosEstados();
+  abertos.forEach(id=>{const e=document.getElementById(id); if(e) e.style.display='grid';});
+}
+function _toggleUF(u){
+  const sel = new Set(_filtros.estados||[]);
+  if (sel.has(u)) sel.delete(u); else sel.add(u);
+  _filtros.estados=[...sel]; salvarFiltros(_filtros);
+  const abertos = [...document.querySelectorAll('.freg-ufs')].filter(e=>e.style.display!=='none').map(e=>e.id);
+  _renderRegioes(); _syncTodosEstados();
+  abertos.forEach(id=>{const e=document.getElementById(id); if(e) e.style.display='grid';});
+}
+function _syncTodosEstados(){
+  const chk = document.getElementById('filtro-todos-estados');
+  if (chk) chk.checked = !(_filtros.estados && _filtros.estados.length);
+}
+function toggleTodosEstados(){
+  _filtros.estados = [];               // volta para "todos os estados"
+  salvarFiltros(_filtros); _renderRegioes(); _syncTodosEstados();
+}
+function limparFiltros(){
+  _filtros = JSON.parse(JSON.stringify(FILTROS_PADRAO));
+  _filtros.estados = [];
+  salvarFiltros(_filtros); _renderFiltros();
+}
+async function aplicarFiltrosBuscar(){
+  if ((Number(_filtros.precoMin)||0) < 500000) {
+    _filtros.precoMin = 500000;
+    const inp = document.getElementById('filtro-preco'); if(inp) inp.value=_fmtNum(500000);
+    _validarPreco();
+  }
+  if (!_filtros.tipos || !_filtros.tipos.length) { _filtros.tipos = ['vrf']; _renderChips('filtro-tipos',OPCOES_TIPOS,'tipos'); }
+  salvarFiltros(_filtros);
+  fecharFiltros();
+  await executarBuscaComFiltros(_filtros);
+}
+
+// Texto do prazo (limite/abertura) — usado no dropdown dos cards
+function _prazoTexto(edital) {
+  const agora=new Date(), msDia=86400000;
+  const enc = edital.dataEncerramentoProposta? new Date(edital.dataEncerramentoProposta):null;
+  const ab  = edital.dataAberturaProposta? new Date(edital.dataAberturaProposta):null;
+  if (enc) {
+    const dias=Math.ceil((enc-agora)/msDia), d=enc.toLocaleDateString('pt-BR');
+    if (dias<0)  return {txt:`Encerrado (${d})`,cor:'#c0392b'};
+    if (dias===0) return {txt:`⚠️ Encerra HOJE (${d})`,cor:'#c0392b'};
+    if (dias===1) return {txt:`⚠️ Encerra amanhã (${d})`,cor:'#d4860b'};
+    return {txt:`${d} · faltam ${dias} dias`,cor:dias<=3?'#d4860b':'#1f7a4d'};
+  }
+  if (ab && ab>agora) return {txt:`Abre em ${ab.toLocaleDateString('pt-BR')}`,cor:'#d4860b'};
+  return {txt:'Data não informada no PNCP',cor:'#6b8a90'};
+}
+
+// Expandir/recolher detalhes de um card de edital
+function toggleDetalhes(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const aberto = el.style.display !== 'none';
+  el.style.display = aberto ? 'none' : 'block';
+  if (btn) btn.innerHTML = aberto ? '▾ Ver detalhes' : '▴ Ocultar detalhes';
 }
 
 async function fetchPNCP(url) {
@@ -1871,6 +2310,16 @@ function formatarEdital(edital) {
     badge = `<span style="display:inline-block;background:#d4860b;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">${txt}</span>`;
   }
 
+  // ── dados para o dropdown de detalhes ──
+  const idSafe = 'det_' + (numero.replace(/[^a-zA-Z0-9]/g,'') || Math.random().toString(36).slice(2));
+  const tiposDet = _classificarSistema(edital).map(t=>TIPO_ROTULO[t]||t).join(', ') || '—';
+  const prazo = _prazoTexto(edital);
+  const prop = _calcularProposta(edital.valorTotalEstimado);
+  const ehFav = !!getFavoritos()[numero];
+  const propHtml = prop
+    ? `<b>${_fmtBRL(prop.sugerida)}</b> <span style="color:#6b8a90;">(faixa ${_fmtBRL(prop.piso)}–${_fmtBRL(prop.teto)})</span>`
+    : 'defina pelo valor de referência no edital';
+
   return `
     <div style="background:#f0f9fb;border:1px solid #b8e0ea;border-radius:10px;padding:12px 14px;margin-top:10px;font-size:13px;">
       ${badge}
@@ -1880,14 +2329,27 @@ function formatarEdital(edital) {
         <div><b>Local:</b><br>${municipio ? municipio+'/' : ''}${uf}</div>
         <div><b>Abertura:</b><br>${abertura}</div>
         <div><b>Encerramento:</b><br>${encerramento}</div>
-        <div style="grid-column:1/-1"><b>Modalidade:</b> ${modalidade}</div>
+        <div style="grid-column:1/-1"><b>Tipo:</b> ${tiposDet} · <b>Modalidade:</b> ${modalidade}</div>
         <div style="grid-column:1/-1"><b>Órgão:</b> ${orgao}</div>
         <div style="grid-column:1/-1"><b>Nº PNCP:</b> ${numero}</div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
-        ${link !== '#' ? `<a href="${link}" target="_blank" style="display:inline-block;background:#1a5f6e;color:white;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">Acessar edital ↗</a>` : ''}
-        ${numero !== '—' ? `<button onclick="analisarEntradaEdital('${numero}')" style="display:inline-block;background:#11808c;color:white;padding:6px 14px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;">📋 Como entrar</button>` : ''}
-        ${link === '#' && numero === '—' ? '<span style="color:#888;font-size:12px">Link não disponível</span>' : ''}
+
+      <button onclick="toggleDetalhes('${idSafe}',this)" style="width:100%;background:#e3f2f6;border:1px solid #b8e0ea;color:#11808c;padding:7px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">▾ Ver detalhes</button>
+
+      <div id="${idSafe}" style="display:none;margin-top:8px;">
+        <div style="background:#fff;border:1px solid #d8e6ea;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#2a4a50;line-height:1.7;">
+          <div>📅 <b>Dia de entrada:</b> <span style="color:${prazo.cor};font-weight:600;">${prazo.txt}</span></div>
+          <div>💰 <b>Proposta média sugerida:</b> ${propHtml}</div>
+          <div>🏛️ <b>Órgão:</b> ${orgao}${municipio ? ' · '+municipio : ''}/${uf}</div>
+          <div>📑 <b>Modalidade:</b> ${modalidade}</div>
+          <div>🧩 <b>Tipo de sistema:</b> ${tiposDet}</div>
+          <div style="color:#6b8a90;margin-top:4px;">📋 Documentação exigida, qualificação técnica (CREA/ART), responsável técnico e prazo de execução: toque em <b>"Como entrar"</b> para a ficha completa gerada pela IA.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          ${numero !== '—' ? `<button onclick="analisarEntradaEdital('${numero}')" style="background:#11808c;color:white;padding:7px 14px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;">📋 Como entrar (documentação + qualificação)</button>` : ''}
+          ${numero !== '—' ? `<button class="btn-fav ${ehFav?'salvo':''}" onclick="toggleFavorito('${numero}',this)" style="background:#f0e6c8;color:#7a5a2a;padding:7px 14px;border-radius:6px;border:1px solid #e0cf9a;font-size:12px;font-weight:600;cursor:pointer;">${ehFav?'✅ Salvo':'⭐ Salvar'}</button>` : ''}
+          ${link !== '#' ? `<a href="${link}" target="_blank" style="display:inline-block;background:#1a5f6e;color:white;padding:7px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">Acessar edital ↗</a>` : ''}
+        </div>
       </div>
     </div>`;
 }
@@ -3528,6 +3990,59 @@ function imprimirCotacao(){
   <div class="panel-body">
     <div id="cot-body"></div>
     <div class="panel-credit">Desenvolvido por <b>Elite Ar Soluções</b> · SONNAR IA</div>
+  </div>
+</div>
+
+<!-- ════════ PAINEL DE FILTROS DE BUSCA ════════ -->
+<div id="filtro-overlay" class="filtro-overlay" onclick="fecharFiltros(event)">
+  <div class="filtro-modal">
+    <div class="filtro-header">
+      <span>🔍 Filtrar Licitações</span>
+      <button class="filtro-close" onclick="fecharFiltros()">✕</button>
+    </div>
+    <div class="filtro-body">
+      <div class="filtro-sec">
+        <div class="filtro-sec-title">Tipo de sistema</div>
+        <div class="filtro-hint">Marque um ou mais — aparecem editais de cada tipo selecionado</div>
+        <div class="filtro-chips" id="filtro-tipos"></div>
+      </div>
+
+      <div class="filtro-sec">
+        <div class="filtro-sec-title">Valor mínimo do edital</div>
+        <div class="filtro-preco-row">
+          <span>R$</span>
+          <input type="text" inputmode="numeric" id="filtro-preco" oninput="onPrecoInput()" placeholder="500.000">
+        </div>
+        <div class="filtro-preco-msg" id="filtro-preco-msg">Buscando editais a partir de R$ 500.000,00</div>
+        <div class="filtro-preco-presets" id="filtro-preco-presets"></div>
+      </div>
+
+      <div class="filtro-sec">
+        <div class="filtro-sec-title">Estados</div>
+        <label class="filtro-allstates"><input type="checkbox" id="filtro-todos-estados" onchange="toggleTodosEstados()"> Todos os estados do Brasil</label>
+        <div class="filtro-hint">Marque uma região (seleciona todos os estados dela) ou abra ▾ para escolher estados</div>
+        <div class="filtro-regioes" id="filtro-regioes"></div>
+      </div>
+
+      <div class="filtro-sec">
+        <div class="filtro-sec-title">Modalidade</div>
+        <div class="filtro-chips" id="filtro-modalidades"></div>
+      </div>
+
+      <div class="filtro-sec">
+        <div class="filtro-sec-title">Situação da proposta</div>
+        <div class="filtro-chips" id="filtro-status"></div>
+      </div>
+
+      <div class="filtro-sec">
+        <div class="filtro-sec-title">Tipo de órgão</div>
+        <div class="filtro-chips" id="filtro-orgaos"></div>
+      </div>
+    </div>
+    <div class="filtro-footer">
+      <button class="filtro-btn-clear" onclick="limparFiltros()">Limpar</button>
+      <button class="filtro-btn-go" onclick="aplicarFiltrosBuscar()">Buscar com filtros</button>
+    </div>
   </div>
 </div>
 
