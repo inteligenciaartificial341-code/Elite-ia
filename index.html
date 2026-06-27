@@ -1639,7 +1639,7 @@ function _normalizarItemBusca(it) {
   const g = (...keys) => { for (const k of keys){ const v=it[k]; if (v!==undefined && v!==null && v!=='') return v; } return undefined; };
   const objeto = g('objetoCompra','description','objeto','ementa','title','descricaoCompleta','texto') || '';
   const numero = g('numeroControlePNCP','numero_controle_pncp','numeroControlePncp','id') || '';
-  const valor  = g('valorTotalEstimado','valor_global','valorGlobal','valor','valorEstimado');
+  const valor  = g('valorTotalEstimado','valor_global','valorGlobal','valor','valorEstimado'); // busca: vem null
   const dtAb   = g('dataAberturaProposta','data_inicio_vigencia','dataInicioVigencia','data_abertura_proposta');
   const dtEn   = g('dataEncerramentoProposta','data_fim_vigencia','dataFimVigencia','data_encerramento_proposta');
   const uf     = g('uf','ufSigla','estado_sigla','sigla_uf','unidadeUf');
@@ -1647,13 +1647,20 @@ function _normalizarItemBusca(it) {
   const orgao  = g('orgao_nome','orgaoNome','razaoSocial','nomeOrgao','orgaoRazaoSocial');
   const unidade= g('unidade_nome','unidadeNome','nomeUnidade');
   const modal  = g('modalidade_licitacao_nome','modalidadeNome','modalidade','modalidadeLicitacaoNome');
-  let link = g('item_url','itemUrl','link','linkSistemaOrigem','urlItem') || '';
-  if (link && link.startsWith('/')) link = 'https://pncp.gov.br' + link;
+  const temRes = it.tem_resultado === true;
+
+  // Link: 1º pelo item_url (autoritativo) transformando /compras/ → /app/editais/; senão pelo número
+  let link = '';
+  const itemUrl = g('item_url','itemUrl','urlItem');
+  if (itemUrl) link = 'https://pncp.gov.br' + String(itemUrl).replace('/compras/', '/app/editais/');
+  else if (numero) link = _linkPNCP(numero);
+
   return {
     objetoCompra: objeto, numeroControlePNCP: numero, valorTotalEstimado: valor,
     dataAberturaProposta: dtAb, dataEncerramentoProposta: dtEn, modalidadeNome: modal,
     unidadeOrgao: { ufSigla: uf, municipioNome: munic, nomeUnidade: unidade },
-    orgaoEntidade: { razaoSocial: orgao }, linkSistemaOrigem: link, _fonte:'busca'
+    orgaoEntidade: { razaoSocial: orgao }, linkSistemaOrigem: link,
+    _temResultado: temRes, _fonte:'busca'
   };
 }
 
@@ -1689,6 +1696,7 @@ function _aplicarFiltrosLocais(lista, f) {
 
   for (const e of lista) {
     if (_ehExcluidoVeiculo(e)) continue;
+    if (e._temResultado === true) continue;                             // já tem vencedor → fora
     const tipos = _classificarSistema(e);
     if (!tipos.some(t => tiposSel.has(t))) continue;                    // TIPO (OR dentro da categoria)
     const uf = (e.unidadeOrgao?.ufSigla || '').toUpperCase();
@@ -2094,7 +2102,13 @@ const _editaisEncontrados = {};
 function _parsePNCP(numero) {
   const m = String(numero || '').trim().match(/(\d{14})-(\d+)-(\d+)\/(\d{4})/);
   if (!m) return null;
-  return { cnpj: m[1], ano: m[4], seq: parseInt(m[3], 10), seqRaw: m[3] };
+  return { cnpj: m[1], seqCompra: m[2], seq: parseInt(m[3], 10), seqRaw: m[3], ano: m[4] };
+}
+// Link correto do edital no site do PNCP: /app/editais/{cnpj}/{ano}/{seq}
+function _linkPNCP(numero) {
+  const p = _parsePNCP(numero);
+  if (p) return 'https://pncp.gov.br/app/editais/' + p.cnpj + '/' + p.ano + '/' + p.seq;
+  return '#';
 }
 
 function _fmtBRL(v) {
@@ -2164,6 +2178,19 @@ async function analisarEntradaEdital(numero) {
     return;
   }
 
+  // 1b) Se veio da busca, o valor é nulo → busca o detalhe p/ obter o valor real
+  if ((edital.valorTotalEstimado === null || edital.valorTotalEstimado === undefined) && p) {
+    await setMsg('Buscando valor estimado e detalhes...');
+    const det = await _fetchDetalhePNCP(p);
+    if (det) {
+      if (det.valorTotalEstimado != null) edital.valorTotalEstimado = det.valorTotalEstimado;
+      if (!edital.dataAberturaProposta && det.dataAberturaProposta) edital.dataAberturaProposta = det.dataAberturaProposta;
+      if (!edital.dataEncerramentoProposta && det.dataEncerramentoProposta) edital.dataEncerramentoProposta = det.dataEncerramentoProposta;
+      if (det.linkSistemaOrigem) edital.linkSistemaOrigem = det.linkSistemaOrigem;
+      _editaisEncontrados[numero] = edital;
+    }
+  }
+
   // 2) Dados estruturados
   const objeto     = edital.objetoCompra || '—';
   const valorRef   = edital.valorTotalEstimado;
@@ -2173,7 +2200,7 @@ async function analisarEntradaEdital(numero) {
   const orgao      = edital.unidadeOrgao?.nomeUnidade || edital.orgaoEntidade?.razaoSocial || '—';
   const uf         = edital.unidadeOrgao?.ufSigla || '';
   const municipio  = edital.unidadeOrgao?.municipioNome || '';
-  const link       = edital.linkSistemaOrigem || edital.linkProcessoEletronico || '#';
+  const link       = edital.linkSistemaOrigem || edital.linkProcessoEletronico || _linkPNCP(numero) || '#';
   const prop       = _calcularProposta(valorRef);
   const agora      = new Date();
   const msDia      = 86400000;
@@ -2271,7 +2298,7 @@ Importante: são requisitos TÍPICOS dessa modalidade — finalize com uma linha
 function formatarEdital(edital) {
   const valor = edital.valorTotalEstimado
     ? 'R$ ' + Number(edital.valorTotalEstimado).toLocaleString('pt-BR', {minimumFractionDigits:2})
-    : 'Não informado';
+    : 'Consultar no edital';
   const aberturaDate = edital.dataAberturaProposta ? new Date(edital.dataAberturaProposta) : null;
   const encerrDate = edital.dataEncerramentoProposta ? new Date(edital.dataEncerramentoProposta) : null;
   const abertura = aberturaDate ? aberturaDate.toLocaleDateString('pt-BR') : '—';
@@ -2280,8 +2307,11 @@ function formatarEdital(edital) {
   const orgao = edital.unidadeOrgao?.nomeUnidade || edital.orgaoEntidade?.razaoSocial || '—';
   const uf = edital.unidadeOrgao?.ufSigla || '—';
   const municipio = edital.unidadeOrgao?.municipioNome || '';
-  const link = edital.linkSistemaOrigem || edital.linkProcessoEletronico || '#';
   const numero = edital.numeroControlePNCP || '—';
+  // Link: usa o do item; se faltar, reconstrói pelo número de controle
+  let link = edital.linkSistemaOrigem || edital.linkProcessoEletronico || '';
+  if ((!link || link === '#') && numero !== '—') link = _linkPNCP(numero);
+  if (!link) link = '#';
   if (numero !== '—') _editaisEncontrados[numero] = edital; // guarda p/ análise de entrada
 
   // ── BADGE DE STATUS ──
