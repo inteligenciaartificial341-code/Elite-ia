@@ -1442,14 +1442,49 @@ async function handleFile(input) {
     r.onerror = () => rej(new Error('Erro'));
     r.readAsDataURL(file);
   });
+  const promptPDF = `Você é especialista em editais públicos (Lei 14.133/2021) e em sistemas de climatização (VRF/VRV, Split, Splitão, Chiller). Leia este edital COMPLETO, do início ao fim, e extraia ABSOLUTAMENTE TUDO, cláusula por cláusula, mantendo a NUMERAÇÃO ORIGINAL do documento (ex: 1.1, 1.1.1, 1.1.2, 7.3.4, etc).
+
+NÃO RESUMA. NÃO PULE NADA. Transcreva o conteúdo de cada item exigido, com o número exato da cláusula como aparece no edital.
+
+Organize a resposta nestes blocos (cada um com a numeração ORIGINAL do edital):
+
+**1. IDENTIFICAÇÃO**
+- Órgão, objeto, modalidade, nº do processo/edital, valor estimado, data/hora de abertura, local da sessão
+
+**2. DOCUMENTAÇÃO DE HABILITAÇÃO** (transcreva cada item com seu número)
+- Habilitação jurídica (cite cada cláusula: x.x)
+- Regularidade fiscal e trabalhista (cada certidão exigida, com a cláusula)
+- Qualificação econômico-financeira (índices contábeis exigidos, capital mínimo, % — com os números exatos do edital)
+
+**3. QUALIFICAÇÃO TÉCNICA** (transcreva cada item com seu número)
+- Atestado(s) de capacidade técnica: o que exatamente exige (m², capacidade TR/kW, quantidade de equipamentos, valor)
+- Registro/certidão no CREA/CAU
+- Responsável técnico exigido (formação, vínculo, ART/RRT)
+- Equipe técnica mínima
+- Certificações/declarações específicas
+
+**4. ESPECIFICAÇÃO TÉCNICA DO SISTEMA (Termo de Referência)** (cláusula por cláusula)
+- Tipo de sistema, capacidade (TR/BTU/kW), marca/modelo de referência, tipo de gás refrigerante
+- Serviços inclusos (projeto, instalação, desmontagem, start-up, comissionamento)
+- Materiais e normas técnicas (ABNT/NBR citadas)
+
+**5. PRAZOS** — execução, entrega, vigência (com as cláusulas)
+**6. GARANTIA** — garantia exigida do objeto e garantia contratual (% e prazo, com cláusulas)
+**7. OBRIGAÇÕES DA CONTRATADA** (itens principais com número)
+**8. PENALIDADES E MULTAS** (cada percentual/situação com a cláusula)
+**9. CRITÉRIO DE JULGAMENTO** — menor preço / técnica e preço / lote / item
+**10. PONTOS DE ATENÇÃO** — riscos, exigências incomuns, pegadinhas que podem desclassificar
+
+Se alguma seção realmente não existir no edital, escreva "[Não consta no edital]". Seja completo e fiel ao texto — esse material será usado para montar a proposta e a habilitação.`;
+
   const userMsg = { role: 'user', content: [
     { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-    { type: 'text', text: 'Analise este edital e extraia: valor estimado, prazo de execução/entrega, documentações exigidas, qualificação técnica, capacidade operacional e resumo do Termo de Referência.' }
+    { type: 'text', text: promptPDF }
   ]};
   conversationHistory.push(userMsg);
   addTyping();
   try {
-    const data = await callAnthropicAPI({ model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT, messages: conversationHistory });
+    const data = await callAnthropicAPI({ model: 'claude-sonnet-4-6', max_tokens: 4000, system: SYSTEM_PROMPT, messages: conversationHistory });
     removeTyping();
     if (data.error) {
       addMessage('assistant', `⚠️ Erro ao processar PDF: ${data.error.message || 'Tente novamente.'}`);
@@ -1642,11 +1677,13 @@ function _normalizarItemBusca(it) {
   const valor  = g('valorTotalEstimado','valor_global','valorGlobal','valor','valorEstimado'); // busca: vem null
   const dtAb   = g('dataAberturaProposta','data_inicio_vigencia','dataInicioVigencia','data_abertura_proposta');
   const dtEn   = g('dataEncerramentoProposta','data_fim_vigencia','dataFimVigencia','data_encerramento_proposta');
+  const dtPub  = g('data_publicacao_pncp','dataPublicacaoPncp','data_publicacao','createdAt');
   const uf     = g('uf','ufSigla','estado_sigla','sigla_uf','unidadeUf');
   const munic  = g('municipio_nome','municipioNome','municipio','nomeMunicipio');
   const orgao  = g('orgao_nome','orgaoNome','razaoSocial','nomeOrgao','orgaoRazaoSocial');
   const unidade= g('unidade_nome','unidadeNome','nomeUnidade');
   const modal  = g('modalidade_licitacao_nome','modalidadeNome','modalidade','modalidadeLicitacaoNome');
+  const tipoNome = g('tipo_nome','tipoNome'); // "Edital", "Aviso de Contratação Direta", etc
   const temRes = it.tem_resultado === true;
 
   // Link: 1º pelo item_url (autoritativo) transformando /compras/ → /app/editais/; senão pelo número
@@ -1660,24 +1697,31 @@ function _normalizarItemBusca(it) {
     dataAberturaProposta: dtAb, dataEncerramentoProposta: dtEn, modalidadeNome: modal,
     unidadeOrgao: { ufSigla: uf, municipioNome: munic, nomeUnidade: unidade },
     orgaoEntidade: { razaoSocial: orgao }, linkSistemaOrigem: link,
-    _temResultado: temRes, _fonte:'busca'
+    _temResultado: temRes, _dataPub: dtPub, _tipoNome: tipoNome, _fonte:'busca'
   };
 }
 
-// ── Busca textual no PNCP (a mesma busca do site do PNCP — server-side por palavra) ──
-const QUERY_POR_TIPO = { vrf:'VRF', chiller:'chiller', splitao:'cassete', split:'split', hvac:'climatização' };
+// ── BUSCA PROFUNDA no PNCP (a mesma busca do site, server-side por palavra) ──
+// Cada tipo tem várias palavras-chave para rastrear TUDO; a paginação vai fundo (até 500 por palavra).
+const QUERIES_POR_TIPO = {
+  vrf:     ['VRF', 'VRV'],          // VRV captura editais que pedem só VRV
+  split:   ['split'],               // pega split, hi-wall, mini/multi split, split piso-teto, etc
+  splitao: ['cassete'],             // splitão/cassete autônomo (o resto vem via 'split')
+  chiller: ['chiller'],             // sistema de água gelada
+  hvac:    ['climatização']
+};
 async function buscarPNCPPorTexto(query, maxPaginas) {
-  maxPaginas = maxPaginas || 3;
+  maxPaginas = maxPaginas || 10;
   let todos = [], pagina = 1, totalPag = 1;
   while (pagina <= totalPag && pagina <= maxPaginas) {
-    const url = `https://pncp.gov.br/api/search/?q=${encodeURIComponent(query)}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=20`;
+    const url = `https://pncp.gov.br/api/search/?q=${encodeURIComponent(query)}&tipos_documento=edital&ordenacao=-data&pagina=${pagina}&tam_pagina=50`;
     let json;
     try { json = await fetchPNCP(url); } catch(e){ break; }
     const items = json.items || json.data || json.resultado || json.registros || [];
     if (!items.length) break;
     todos = todos.concat(items.map(_normalizarItemBusca));
     const total = json.total || json.totalRegistros || json.totalElements || items.length;
-    totalPag = Math.max(1, Math.ceil(total / 20));
+    totalPag = Math.max(1, Math.ceil(total / 50));
     pagina++;
   }
   return todos;
@@ -1697,6 +1741,7 @@ function _aplicarFiltrosLocais(lista, f) {
   for (const e of lista) {
     if (_ehExcluidoVeiculo(e)) continue;
     if (e._temResultado === true) continue;                             // já tem vencedor → fora
+    if (_ehRegistroPreco(e)) continue;                                  // Registro de Preço → fora (Paulo não quer SRP)
     const tipos = _classificarSistema(e);
     if (!tipos.some(t => tiposSel.has(t))) continue;                    // TIPO (OR dentro da categoria)
     const uf = (e.unidadeOrgao?.ufSigla || '').toUpperCase();
@@ -1715,6 +1760,11 @@ function _aplicarFiltrosLocais(lista, f) {
     out.push(e);
   }
   return out;
+}
+// Detecta Sistema de Registro de Preços (SRP) — Paulo não quer (gera ata/cancelamento)
+function _ehRegistroPreco(e) {
+  const txt = ((e.objetoCompra||'') + ' ' + (e.modalidadeNome||'')).toLowerCase();
+  return /registro de pre[çc]o|sistema de registro|\bsrp\b|ata de registro|registro de pre[çc]os/.test(txt);
 }
 function _statusBate(e, st, statusSel, agora, msDia) {
   if (st === 'aberto') return statusSel.has('aberto');
@@ -1759,19 +1809,38 @@ async function executarBuscaComFiltros(f) {
 
   let brutos = [];
   const tipos = (f.tipos && f.tipos.length) ? f.tipos : ['vrf'];
+
+  // Monta a lista completa de palavras-chave de todos os tipos selecionados
+  const queries = [];
   for (const t of tipos) {
-    const q = QUERY_POR_TIPO[t] || t;
-    await ts.setMsg(`Procurando "${q}" em todo o Brasil...`);
-    try { brutos = brutos.concat(await buscarPNCPPorTexto(q, 3)); } catch(e){}
+    const qs = QUERIES_POR_TIPO[t] || [t];
+    for (const q of qs) if (!queries.includes(q)) queries.push(q);
   }
 
-  // Fallback: se a busca textual falhar, usa o método por modalidade (VRF)
+  // Busca PROFUNDA: roda cada palavra-chave varrendo várias páginas (rastreia tudo)
+  let i = 0;
+  for (const q of queries) {
+    i++;
+    await ts.setMsg(`Rastreando "${q}" em todo o Brasil (${i}/${queries.length})...`);
+    try { brutos = brutos.concat(await buscarPNCPPorTexto(q, 10)); } catch(e){}
+  }
+
+  // Remove duplicatas (mesmo número PNCP)
+  const vistos = new Set();
+  brutos = brutos.filter(e => {
+    const id = e.numeroControlePNCP || JSON.stringify(e);
+    if (vistos.has(id)) return false;
+    vistos.add(id);
+    return true;
+  });
+
+  // Fallback: se a busca falhar, usa o método por modalidade (VRF)
   if (brutos.length === 0) {
     await ts.setMsg('Consultando base alternativa do PNCP...');
     try { brutos = await buscarEditaisPNCP(''); } catch(e){ brutos = []; }
   }
 
-  await ts.setMsg('Filtrando e organizando resultados...');
+  await ts.setMsg(`Analisando ${brutos.length} editais e aplicando filtros...`);
   const filtrados = _aplicarFiltrosLocais(brutos, f);
   await ts.finish();
 
@@ -1783,9 +1852,9 @@ async function executarBuscaComFiltros(f) {
   const ordenados = ordenarPorUrgencia(filtrados);
   const abertos = ordenados.filter(e => (e._status||_statusEdital(e))==='aberto');
   const futuros = ordenados.filter(e => (e._status||_statusEdital(e))==='futuro');
-  const top = ordenados.slice(0, 25);
+  const top = ordenados.slice(0, 40);
   let out = `<strong>📋 ${filtrados.length} edital(is) — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
-  out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">${_resumoFiltros(f)}</div>`;
+  out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">${_resumoFiltros(f)} · ${brutos.length} rastreados</div>`;
   for (const e of top) out += formatarEdital(e);
   if (filtrados.length > top.length) out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${filtrados.length}.</div>`;
   addMessage('assistant', out, true);
@@ -2138,6 +2207,77 @@ async function _fetchDetalhePNCP(p) {
   return null;
 }
 
+// Prompt de extração LITERAL (usado quando conseguimos baixar o PDF do edital)
+const _PROMPT_EXTRACAO_LITERAL = `Você é especialista em editais públicos (Lei 14.133/2021) e climatização (VRF/VRV, Split, Splitão, Chiller). Leia este edital COMPLETO e extraia ABSOLUTAMENTE TUDO, cláusula por cláusula, mantendo a NUMERAÇÃO ORIGINAL (ex: 1.1, 1.1.1, 7.3.4). NÃO RESUMA, NÃO PULE NADA.
+
+Organize nestes blocos, citando o número de cada cláusula como aparece no edital:
+**1. IDENTIFICAÇÃO** — órgão, objeto, modalidade, nº processo/edital, valor estimado, data/hora de abertura, local da sessão
+**2. DOCUMENTAÇÃO DE HABILITAÇÃO** — jurídica, regularidade fiscal e trabalhista (cada certidão), qualificação econômico-financeira (índices e capital mínimo com os números exatos)
+**3. QUALIFICAÇÃO TÉCNICA** — atestado(s) (m²/TR/kW/quantidade/valor exigidos), CREA/CAU, responsável técnico (formação, vínculo, ART/RRT), equipe mínima, certificações
+**4. ESPECIFICAÇÃO TÉCNICA (Termo de Referência)** — tipo de sistema, capacidade, marca/modelo de referência, gás refrigerante, serviços inclusos, normas NBR
+**5. PRAZOS** — execução, entrega, vigência
+**6. GARANTIA** — do objeto e contratual (% e prazo)
+**7. OBRIGAÇÕES DA CONTRATADA** — principais itens
+**8. PENALIDADES** — cada multa/percentual
+**9. CRITÉRIO DE JULGAMENTO** — menor preço / técnica e preço / por item ou lote
+**10. PONTOS DE ATENÇÃO** — riscos e exigências que podem desclassificar
+
+Se algo não constar, escreva "[Não consta no edital]". Seja fiel ao texto — será usado para habilitação e proposta.`;
+
+// Baixa o PDF principal do edital no PNCP e retorna em base64 (ou null se não conseguir).
+// Best-effort: se a API de arquivos ou o download falhar, retorna null (cai no checklist típico).
+async function _baixarPDFEdital(p) {
+  // 1) Lista de arquivos do edital
+  let arquivos = null;
+  const listaUrls = [
+    `https://pncp.gov.br/api/pncp/v1/orgaos/${p.cnpj}/compras/${p.ano}/${p.seq}/arquivos`,
+    `https://pncp.gov.br/pncp-api/v1/orgaos/${p.cnpj}/compras/${p.ano}/${p.seq}/arquivos`
+  ];
+  for (const url of listaUrls) {
+    try {
+      const json = await fetchPNCP(url);
+      if (Array.isArray(json) && json.length) { arquivos = json; break; }
+      if (json && Array.isArray(json.data) && json.data.length) { arquivos = json.data; break; }
+    } catch (e) { /* tenta próxima */ }
+  }
+  if (!arquivos || !arquivos.length) return null;
+
+  // 2) Escolhe o melhor arquivo (preferência: título com "edital"; senão o 1º PDF/qualquer)
+  const getURI = (a) => a.uri || a.url || a.uriArquivo || a.link || '';
+  const getNome = (a) => (a.titulo || a.nomeArquivo || a.nome || '').toLowerCase();
+  let alvo = arquivos.find(a => getNome(a).includes('edital')) ||
+             arquivos.find(a => (getNome(a).endsWith('.pdf')) || String(getURI(a)).toLowerCase().includes('.pdf')) ||
+             arquivos[0];
+  let uri = getURI(alvo);
+  if (!uri) return null;
+  if (uri.startsWith('/')) uri = 'https://pncp.gov.br' + uri;
+
+  // 3) Baixa o binário via proxies CORS e converte p/ base64 (com limite de tamanho)
+  const proxies = [
+    (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
+    (u) => u
+  ];
+  for (const make of proxies) {
+    try {
+      const resp = await fetch(make(uri));
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      // Limite ~4MB de PDF (base64 ~5.3MB) para caber no proxy serverless
+      if (blob.size === 0 || blob.size > 4 * 1024 * 1024) return null;
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => { const s = String(r.result); const i = s.indexOf(','); res(i >= 0 ? s.slice(i+1) : ''); };
+        r.onerror = () => rej(new Error('read'));
+        r.readAsDataURL(blob);
+      });
+      if (b64 && b64.length > 100) return b64;
+    } catch (e) { /* tenta próximo proxy */ }
+  }
+  return null;
+}
+
 // Monta a "Ficha de Entrada": data limite, proposta sugerida, documentação,
 // qualificação técnica e link — tudo o que é preciso para entrar no edital.
 async function analisarEntradaEdital(numero) {
@@ -2220,29 +2360,58 @@ async function analisarEntradaEdital(numero) {
     prazoCor = '#d4860b';
   }
 
-  // 3) IA: documentação de habilitação + qualificação técnica VRF (Lei 14.133/2021)
-  await setMsg('Levantando documentação e qualificação técnica...');
-  const promptIA = `Você é especialista em licitações públicas brasileiras (Lei 14.133/2021) e em sistemas de climatização VRF. Para o edital abaixo, liste de forma objetiva o que uma empresa precisa para PARTICIPAR e VENCER.
+  // 3) IA: documentação detalhada. Tenta BAIXAR o PDF do edital p/ extração LITERAL
+  //    (cláusula por cláusula). Se não conseguir, gera checklist exaustivo do tipo de edital.
+  await setMsg('Procurando o PDF do edital no PNCP...');
+  let analiseIA = '';
+  let lendoPDF = false;
+  try {
+    if (p) {
+      const pdfB64 = await _baixarPDFEdital(p);
+      if (pdfB64) {
+        lendoPDF = true;
+        await setMsg('Lendo o edital inteiro, cláusula por cláusula...');
+        const data = await callAnthropicAPI({
+          model: 'claude-sonnet-4-6', max_tokens: 4000,
+          messages: [{ role: 'user', content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfB64 } },
+            { type: 'text', text: _PROMPT_EXTRACAO_LITERAL }
+          ]}]
+        });
+        analiseIA = data.content?.[0]?.text || '';
+      }
+    }
+  } catch (e) { analiseIA = ''; lendoPDF = false; }
+
+  // Fallback: sem PDF acessível → checklist exaustivo típico desse tipo de edital
+  if (!analiseIA) {
+    await setMsg('Montando checklist detalhado de exigências...');
+    const promptIA = `Você é especialista em editais públicos brasileiros (Lei 14.133/2021) e em sistemas de climatização (VRF/VRV, Split, Splitão, Chiller). Para o edital abaixo, monte um CHECKLIST EXAUSTIVO de tudo que a empresa precisa para HABILITAR e VENCER. Não resuma — detalhe item por item, organizado e numerado.
 
 OBJETO: ${objeto}
 MODALIDADE: ${modalidade}
 ÓRGÃO: ${orgao}${municipio ? ' — ' + municipio : ''}${uf ? '/' + uf : ''}
 VALOR DE REFERÊNCIA: ${valorRef ? _fmtBRL(valorRef) : 'não informado'}
 
-Responda em português brasileiro, direto, em tópicos curtos. Use exatamente estes blocos com título em **negrito**:
-**Habilitação Jurídica** (contrato social, etc.)
-**Regularidade Fiscal e Trabalhista** (CND Federal, FGTS, estadual, municipal, CNDT)
-**Qualificação Econômico-Financeira** (balanço, certidão de falência, capital/patrimônio mínimo quando exigido)
-**Qualificação Técnica para VRF** (atestado de capacidade técnica compatível, registro no CREA, ART/RRT, engenheiro mecânico responsável, e o que mais é típico em obra de VRF)
-**Estratégia de Proposta** (1-2 frases sobre preço diante do valor de referência)
+Detalhe TODOS estes blocos (numere os subitens 1.1, 1.2, 2.1, 2.2...):
 
-Importante: são requisitos TÍPICOS dessa modalidade — finalize com uma linha curta avisando que o edital deve ser conferido para exigências específicas. Não invente números de atestado nem percentuais que só o edital teria.`;
+**1. Habilitação Jurídica** — todos os documentos societários
+**2. Regularidade Fiscal e Trabalhista** — cada certidão (Federal/Dívida Ativa, Estadual, Municipal, FGTS, CNDT) e onde tirar
+**3. Qualificação Econômico-Financeira** — balanço, certidão de falência, e índices contábeis típicos (LG, LC, SG) e capital/patrimônio mínimo quando exigido
+**4. Qualificação Técnica** — atestado(s) de capacidade técnica compatível, registro no CREA, ART/RRT, engenheiro mecânico responsável, equipe técnica e o que mais é típico nesse tipo de obra/serviço
+**5. Especificação Técnica do Sistema** — para o tipo de equipamento do objeto (VRF/Split/Chiller): o que costuma ser exigido (capacidade TR/kW, tipo de gás, marca de referência, normas NBR, serviços de instalação/start-up)
+**6. Prazos típicos** — execução, entrega, vigência
+**7. Garantia** — do objeto e contratual (% e prazos típicos)
+**8. Penalidades** — multas típicas por atraso/inexecução
+**9. Critério de Julgamento** — provável (menor preço por item/lote)
+**10. Pontos de Atenção** — riscos e exigências que costumam desclassificar
 
-  let analiseIA = '';
-  try {
-    const data = await callAnthropicAPI({ model: 'claude-sonnet-4-6', max_tokens: 900, messages: [{ role: 'user', content: promptIA }] });
-    analiseIA = data.content?.[0]?.text || '';
-  } catch (e) { analiseIA = ''; }
+⚠️ Estes são os requisitos TÍPICOS dessa modalidade/objeto. As cláusulas EXATAS (1.1, 1.1.1...) estão no PDF do edital. Não invente números de atestado nem percentuais específicos — quando for típico, diga "geralmente".`;
+    try {
+      const data = await callAnthropicAPI({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: promptIA }] });
+      analiseIA = data.content?.[0]?.text || '';
+    } catch (e) { analiseIA = ''; }
+  }
 
   // 4) Encerrar stream e renderizar a ficha
   shieldEl.classList.add('done');
@@ -2279,9 +2448,15 @@ Importante: são requisitos TÍPICOS dessa modalidade — finalize com uma linha
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid #eef3f5;">${blocoProposta}</div>
     </div>`;
 
+  const tituloReq = lendoPDF
+    ? '📋 Documentação & Qualificação Técnica <span style="font-size:10px;background:#1f9d55;color:#fff;padding:2px 7px;border-radius:10px;margin-left:4px;">LIDO DO EDITAL</span>'
+    : '📋 Documentação & Qualificação Técnica';
+  const avisoTipico = lendoPDF ? '' :
+    `<div style="font-size:11px;color:#7a5a2a;background:#fff7ed;border:1px solid #f0d8b8;border-radius:7px;padding:7px 9px;margin-bottom:8px;">⚠️ Exigências <b>típicas</b> desse tipo de edital. Para as cláusulas exatas (1.1, 1.1.1…), toque em 📎 e envie o PDF do edital — eu leio e extraio literalmente.</div>`;
   const blocoReq = analiseIA
     ? `<div style="background:#f7fbfc;border:1px solid #d8e6ea;border-radius:10px;padding:12px 14px;margin-top:8px;font-size:13px;">
-         <div style="font-weight:700;color:#11808c;margin-bottom:6px;">📋 Documentação & Qualificação Técnica</div>
+         <div style="font-weight:700;color:#11808c;margin-bottom:6px;">${tituloReq}</div>
+         ${avisoTipico}
          ${formatAIResponse(analiseIA)}
        </div>`
     : `<div style="background:#fff7ed;border:1px solid #f0d8b8;border-radius:10px;padding:12px 14px;margin-top:8px;font-size:13px;color:#7a5a2a;">
