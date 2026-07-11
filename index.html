@@ -1041,6 +1041,8 @@
 .fchip{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#dbe9ee;padding:8px 14px;border-radius:20px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;}
 .fchip.small{padding:6px 11px;font-size:12px;}
 .fchip.on{background:linear-gradient(135deg,var(--teal-light),var(--teal-glow));border-color:var(--teal-glow);color:#fff;font-weight:600;}
+.fchip.off{opacity:.45;cursor:default;}
+.fchip-soon{display:inline-block;margin-left:6px;font-size:9px;background:rgba(255,255,255,0.16);padding:1px 7px;border-radius:9px;letter-spacing:.3px;vertical-align:1px;}
 .filtro-preco-row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:11px 14px;}
 .filtro-preco-row span{color:#9fc0c9;font-weight:600;}
 .filtro-preco-row input{flex:1;background:none;border:none;color:#fff;font-size:17px;font-weight:700;outline:none;font-family:inherit;}
@@ -1581,7 +1583,8 @@ function _objetoEhVRF(item) {
 const TIPOS_SISTEMA = {
   vrf:     ['vrf','vrv','fluxo de refrigerante variavel','fluxo de refrigerante variável',
             'volume de refrigerante variavel','volume de refrigerante variável',
-            'fluxo variavel de refrigerante','fluxo variável de refrigerante'],
+            'fluxo variavel de refrigerante','fluxo variável de refrigerante',
+            'refrigerante variavel','refrigerante variável'],
   chiller: ['chiller','agua gelada','água gelada','resfriador de liquido','resfriador de líquido',
             'fan coil','fan-coil','fancoil'],
   splitao: ['splitao','splitão','split piso teto','piso teto','piso-teto','cassete','cassette',
@@ -1604,6 +1607,42 @@ function _classificarSistema(item) {
 function _ehExcluidoVeiculo(item) {
   const obj = (item.objetoCompra || '').toLowerCase();
   return VRF_EXCLUSOES.some(kw => obj.includes(kw));
+}
+
+// ── Classificador de TIPO DE SERVIÇO (instalação × manutenção × reforma × aquisição) ──
+// Regra de precedência: se o objeto é primariamente de MANUTENÇÃO (o termo de manutenção
+// aparece ANTES do termo de instalação no texto), a "instalação" citada é incidental
+// (ex: "manutenção ... instalação, desinstalação e reinstalação de equipamentos em uso")
+// e o edital NÃO ganha a tag de instalação. Se a instalação vem primeiro
+// (ex: "fornecimento, instalação e manutenção durante a garantia"), ganha as duas.
+const SERVICO_ROTULO = { instalacao:'Instalação', manutencao:'Manutenção', reforma:'Reforma/Retrofit', aquisicao:'Aquisição' };
+const _SERV_INSTALACAO = ['instalação','instalacao','implantação','implantacao','montagem'];
+const _SERV_MANUTENCAO = ['manutenção','manutencao','preventiva','corretiva',
+                          'assistência técnica','assistencia tecnica','conservação','conservacao'];
+const _SERV_REFORMA    = ['reforma','retrofit','substituição','substituicao','modernização','modernizacao',
+                          'readequação','readequacao','adequação','adequacao','revitalização','revitalizacao','troca de'];
+const _SERV_AQUISICAO  = ['aquisição','aquisicao','compra de'];
+
+function _classificarServico(item) {
+  let obj = (item.objetoCompra || '').toLowerCase();
+  // Remove termos que contêm "instalação"/"montagem" mas são de contexto de manutenção
+  obj = obj.replace(/desinstala[çc][ãa]o|reinstala[çc][ãa]o|desmontagem|remontagem/g, ' ');
+  const primeiraPos = (kws) => {
+    let min = -1;
+    for (const k of kws) { const i = obj.indexOf(k); if (i >= 0 && (min < 0 || i < min)) min = i; }
+    return min;
+  };
+  const pInst = primeiraPos(_SERV_INSTALACAO);
+  const pManu = primeiraPos(_SERV_MANUTENCAO);
+  const pRef  = primeiraPos(_SERV_REFORMA);
+  const pAq   = primeiraPos(_SERV_AQUISICAO);
+
+  const servicos = [];
+  if (pManu >= 0) servicos.push('manutencao');
+  if (pInst >= 0 && (pManu < 0 || pInst < pManu)) servicos.push('instalacao'); // instalação só se for primária
+  if (pRef  >= 0) servicos.push('reforma');
+  if (pAq   >= 0) servicos.push('aquisicao');
+  return servicos; // [] = não classificado (passa em qualquer filtro, benefício da dúvida)
 }
 
 // ── Regiões → estados ──
@@ -1641,7 +1680,9 @@ function _tipoOrgao(item) {
 // ── Estado dos filtros (sessionStorage: zera só quando fecha a aba 100%) ──
 const FILTROS_KEY = 'sonnar_filtros_busca_v1';
 const FILTROS_PADRAO = {
+  portais: ['pncp'],    // portais de busca ativos (estrutura pronta p/ Compras.gov.br etc.)
   tipos: ['vrf'],
+  servicos: ['instalacao','manutencao','reforma','aquisicao'],  // tipo de serviço
   precoMin: 500000,
   estados: [],          // [] = todos os estados
   modalidades: ['pregao','concorrencia','dispensa'],
@@ -1704,11 +1745,37 @@ function _normalizarItemBusca(it) {
 // ── BUSCA PROFUNDA no PNCP (a mesma busca do site, server-side por palavra) ──
 // Cada tipo tem várias palavras-chave para rastrear TUDO; a paginação vai fundo (até 500 por palavra).
 const QUERIES_POR_TIPO = {
-  vrf:     ['VRF', 'VRV'],          // VRV captura editais que pedem só VRV
-  split:   ['split'],               // pega split, hi-wall, mini/multi split, split piso-teto, etc
-  splitao: ['cassete'],             // splitão/cassete autônomo (o resto vem via 'split')
-  chiller: ['chiller'],             // sistema de água gelada
-  hvac:    ['climatização']
+  // Editais de INSTALAÇÃO nem sempre escrevem "VRF" no objeto — muitos escrevem por extenso
+  // ("fluxo de refrigerante variável") ou genérico ("climatização"). Por isso cada tipo
+  // rastreia mais de uma palavra; o classificador local separa depois.
+  vrf:     ['VRF', 'VRV', 'refrigerante variável'],   // por extenso pega obras que não usam a sigla
+  split:   ['split'],                                  // pega split, hi-wall, mini/multi, piso-teto
+  splitao: ['cassete', 'self contained'],              // splitão/cassete/self autônomos
+  chiller: ['chiller', 'água gelada'],                 // centrais de água gelada sem a palavra chiller
+  hvac:    ['climatização']                            // instalações genéricas de climatização
+};
+
+// ── REGISTRO DE PORTAIS (arquitetura modular p/ ampliar a busca além do PNCP) ──
+// Cada portal é um conector independente: { nome, ativo, buscar(queries, onMsg) → editais[] }.
+// Para adicionar um portal novo (Compras.gov.br, Licitações-e...), basta implementar
+// o buscar() dele aqui e marcar ativo: true — o resto do app já funciona.
+const PORTAIS_BUSCA = {
+  pncp: {
+    nome: 'PNCP',
+    ativo: true,
+    async buscar(queries, onMsg) {
+      let out = [];
+      let i = 0;
+      for (const q of queries) {
+        i++;
+        try { await onMsg(`PNCP · rastreando "${q}" (${i}/${queries.length})...`); } catch(e){}
+        try { out = out.concat(await buscarPNCPPorTexto(q, 10)); } catch(e){}
+      }
+      return out;
+    }
+  },
+  comprasgov:  { nome: 'Compras.gov.br', ativo: false },  // em breve
+  licitacoese: { nome: 'Licitações-e',   ativo: false }   // em breve
 };
 async function buscarPNCPPorTexto(query, maxPaginas) {
   maxPaginas = maxPaginas || 10;
@@ -1730,6 +1797,7 @@ async function buscarPNCPPorTexto(query, maxPaginas) {
 // ── Aplica TODOS os filtros do usuário sobre a lista bruta ──
 function _aplicarFiltrosLocais(lista, f) {
   const tiposSel  = new Set(f.tipos && f.tipos.length ? f.tipos : ['vrf']);
+  const servSel   = new Set(f.servicos || []);
   const estadosSel= f.estados && f.estados.length ? new Set(f.estados) : null; // null = todos
   const modaisSel = new Set(f.modalidades || []);
   const statusSel = new Set(f.status || []);
@@ -1744,6 +1812,9 @@ function _aplicarFiltrosLocais(lista, f) {
     if (_ehRegistroPreco(e)) continue;                                  // Registro de Preço → fora (Paulo não quer SRP)
     const tipos = _classificarSistema(e);
     if (!tipos.some(t => tiposSel.has(t))) continue;                    // TIPO (OR dentro da categoria)
+    const servs = _classificarServico(e);
+    e._servicos = servs;
+    if (servSel.size && servs.length && !servs.some(s => servSel.has(s))) continue; // SERVIÇO (não classificado passa)
     const uf = (e.unidadeOrgao?.ufSigla || '').toUpperCase();
     if (estadosSel && !estadosSel.has(uf)) continue;                    // ESTADO
     const v = Number(e.valorTotalEstimado) || 0;
@@ -1780,8 +1851,12 @@ function _statusBate(e, st, statusSel, agora, msDia) {
 }
 function _resumoFiltros(f) {
   const tipos = (f.tipos||[]).map(t=>TIPO_ROTULO[t]||t).join(', ') || '—';
+  const nServ = (f.servicos||[]).length;
+  const serv = (nServ > 0 && nServ < OPCOES_SERVICO.length)
+    ? ' · ' + f.servicos.map(s=>SERVICO_ROTULO[s]||s).join('/')
+    : '';
   const est = (f.estados && f.estados.length) ? f.estados.join(', ') : 'Todos os estados';
-  return `${tipos} · valor ≥ ${_fmtBRL(Math.max(500000, f.precoMin||0))} · ${est}`;
+  return `${tipos}${serv} · valor ≥ ${_fmtBRL(Math.max(500000, f.precoMin||0))} · ${est}`;
 }
 
 // ── Stream de "pensando" reutilizável ──
@@ -1817,12 +1892,15 @@ async function executarBuscaComFiltros(f) {
     for (const q of qs) if (!queries.includes(q)) queries.push(q);
   }
 
-  // Busca PROFUNDA: roda cada palavra-chave varrendo várias páginas (rastreia tudo)
-  let i = 0;
-  for (const q of queries) {
-    i++;
-    await ts.setMsg(`Rastreando "${q}" em todo o Brasil (${i}/${queries.length})...`);
-    try { brutos = brutos.concat(await buscarPNCPPorTexto(q, 10)); } catch(e){}
+  // Portais selecionados (só os que já têm conector ativo; PNCP é o fallback)
+  let portais = (f.portais && f.portais.length ? f.portais : ['pncp'])
+    .filter(pid => PORTAIS_BUSCA[pid] && PORTAIS_BUSCA[pid].ativo);
+  if (!portais.length) portais = ['pncp'];
+
+  // Busca PROFUNDA: cada portal roda todas as palavras-chave varrendo várias páginas
+  for (const pid of portais) {
+    const portal = PORTAIS_BUSCA[pid];
+    try { brutos = brutos.concat(await portal.buscar(queries, (m) => ts.setMsg(m))); } catch(e){}
   }
 
   // Remove duplicatas (mesmo número PNCP)
@@ -1864,6 +1942,7 @@ async function executarBuscaComFiltros(f) {
 //  PAINEL DE FILTROS — interface
 // ════════════════════════════════════════════════════════════════
 const OPCOES_TIPOS  = [['vrf','VRF'],['split','Split'],['splitao','Splitão'],['chiller','Chiller'],['hvac','HVAC']];
+const OPCOES_SERVICO= [['instalacao','Instalação / Obra nova'],['manutencao','Manutenção'],['reforma','Reforma / Retrofit'],['aquisicao','Aquisição']];
 const OPCOES_MODAL  = [['pregao','Pregão Eletrônico'],['concorrencia','Concorrência'],['dispensa','Dispensa'],['inexigibilidade','Inexigibilidade']];
 const OPCOES_STATUS = [['aberto','Aberto agora'],['3dias','Abre em 3 dias'],['7dias','Abre em 7 dias'],['30dias','Abre em 30 dias']];
 const OPCOES_ORGAO  = [['municipal','Prefeitura'],['estadual','Estadual'],['federal','Federal'],['autarquia','Autarquia/Conselho'],['outro','Outro']];
@@ -1879,7 +1958,9 @@ function fecharFiltros(e) {
   document.getElementById('filtro-overlay').classList.remove('open');
 }
 function _renderFiltros() {
+  _renderPortais();
   _renderChips('filtro-tipos', OPCOES_TIPOS, 'tipos');
+  _renderChips('filtro-servicos', OPCOES_SERVICO, 'servicos');
   _renderChips('filtro-modalidades', OPCOES_MODAL, 'modalidades');
   _renderChips('filtro-status', OPCOES_STATUS, 'status');
   _renderChips('filtro-orgaos', OPCOES_ORGAO, 'orgaos');
@@ -1888,6 +1969,24 @@ function _renderFiltros() {
   _validarPreco();
   _renderRegioes();
   _syncTodosEstados();
+}
+// ── Chips de portais (PNCP ativo; futuros aparecem como "em breve") ──
+function _renderPortais() {
+  const el = document.getElementById('filtro-portais'); if(!el) return;
+  const sel = new Set(_filtros.portais || ['pncp']);
+  el.innerHTML = Object.entries(PORTAIS_BUSCA).map(([id, p]) =>
+    p.ativo
+      ? `<button type="button" class="fchip ${sel.has(id)?'on':''}" onclick="_togglePortal('${id}')">${p.nome}</button>`
+      : `<button type="button" class="fchip off">${p.nome}<span class="fchip-soon">em breve</span></button>`
+  ).join('');
+}
+function _togglePortal(id) {
+  const sel = new Set(_filtros.portais || ['pncp']);
+  if (sel.has(id)) { if (sel.size <= 1) return; sel.delete(id); }  // nunca deixa zerar
+  else sel.add(id);
+  _filtros.portais = [...sel];
+  salvarFiltros(_filtros);
+  _renderPortais();
 }
 function _renderChips(id, opcoes, key) {
   const el = document.getElementById(id); if(!el) return;
@@ -2518,6 +2617,7 @@ function formatarEdital(edital) {
   // ── dados para o dropdown de detalhes ──
   const idSafe = 'det_' + (numero.replace(/[^a-zA-Z0-9]/g,'') || Math.random().toString(36).slice(2));
   const tiposDet = _classificarSistema(edital).map(t=>TIPO_ROTULO[t]||t).join(', ') || '—';
+  const servDet = (edital._servicos || _classificarServico(edital)).map(s=>SERVICO_ROTULO[s]||s).join(', ') || '—';
   const prazo = _prazoTexto(edital);
   const prop = _calcularProposta(edital.valorTotalEstimado);
   const ehFav = !!getFavoritos()[numero];
@@ -2534,7 +2634,8 @@ function formatarEdital(edital) {
         <div><b>Local:</b><br>${municipio ? municipio+'/' : ''}${uf}</div>
         <div><b>Abertura:</b><br>${abertura}</div>
         <div><b>Encerramento:</b><br>${encerramento}</div>
-        <div style="grid-column:1/-1"><b>Tipo:</b> ${tiposDet} · <b>Modalidade:</b> ${modalidade}</div>
+        <div style="grid-column:1/-1"><b>Tipo:</b> ${tiposDet} · <b>Serviço:</b> ${servDet}</div>
+        <div style="grid-column:1/-1"><b>Modalidade:</b> ${modalidade}</div>
         <div style="grid-column:1/-1"><b>Órgão:</b> ${orgao}</div>
         <div style="grid-column:1/-1"><b>Nº PNCP:</b> ${numero}</div>
       </div>
@@ -2548,6 +2649,7 @@ function formatarEdital(edital) {
           <div>🏛️ <b>Órgão:</b> ${orgao}${municipio ? ' · '+municipio : ''}/${uf}</div>
           <div>📑 <b>Modalidade:</b> ${modalidade}</div>
           <div>🧩 <b>Tipo de sistema:</b> ${tiposDet}</div>
+          <div>🔧 <b>Tipo de serviço:</b> ${servDet}</div>
           <div style="color:#6b8a90;margin-top:4px;">📋 Documentação exigida, qualificação técnica (CREA/ART), responsável técnico e prazo de execução: toque em <b>"Como entrar"</b> para a ficha completa gerada pela IA.</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
@@ -4207,9 +4309,21 @@ function imprimirCotacao(){
     </div>
     <div class="filtro-body">
       <div class="filtro-sec">
+        <div class="filtro-sec-title">Portais de busca</div>
+        <div class="filtro-hint">Onde procurar os editais — novos portais serão adicionados aqui</div>
+        <div class="filtro-chips" id="filtro-portais"></div>
+      </div>
+
+      <div class="filtro-sec">
         <div class="filtro-sec-title">Tipo de sistema</div>
         <div class="filtro-hint">Marque um ou mais — aparecem editais de cada tipo selecionado</div>
         <div class="filtro-chips" id="filtro-tipos"></div>
+      </div>
+
+      <div class="filtro-sec">
+        <div class="filtro-sec-title">Tipo de serviço</div>
+        <div class="filtro-hint">Desmarque "Manutenção" para ver só obra nova, reforma e aquisição</div>
+        <div class="filtro-chips" id="filtro-servicos"></div>
       </div>
 
       <div class="filtro-sec">
