@@ -1763,12 +1763,17 @@ const PORTAIS_BUSCA = {
   pncp: {
     nome: 'PNCP',
     ativo: true,
-    async buscar(queries, onMsg) {
+    async buscar(queries, onMsg, f) {
       let out = [];
+      // MOTOR 1 — varredura COMPLETA por período (cobertura total do que está aberto,
+      // com valor estimado e flag SRP direto da fonte)
+      try { out = await buscarPNCPPorPeriodo(f, onMsg); } catch(e){}
+      // MOTOR 2 — busca textual (complemento: futuras em âmbito nacional + redundância).
+      // Vem DEPOIS do motor 1 para a deduplicação manter o registro mais rico (com valor).
       let i = 0;
       for (const q of queries) {
         i++;
-        try { await onMsg(`PNCP · rastreando "${q}" (${i}/${queries.length})...`); } catch(e){}
+        try { await onMsg(`PNCP · busca textual "${q}" (${i}/${queries.length})...`); } catch(e){}
         try { out = out.concat(await buscarPNCPPorTexto(q, 10)); } catch(e){}
       }
       return out;
@@ -1786,6 +1791,7 @@ async function buscarPNCPPorTexto(query, maxPaginas) {
     try { json = await fetchPNCP(url); } catch(e){ break; }
     const items = json.items || json.data || json.resultado || json.registros || [];
     if (!items.length) break;
+    _varredura.analisados += items.length;
     todos = todos.concat(items.map(_normalizarItemBusca));
     const total = json.total || json.totalRegistros || json.totalElements || items.length;
     totalPag = Math.max(1, Math.ceil(total / 50));
@@ -1833,7 +1839,9 @@ function _aplicarFiltrosLocais(lista, f) {
   return out;
 }
 // Detecta Sistema de Registro de Preços (SRP) — Paulo não quer (gera ata/cancelamento)
+// 1º: flag oficial `srp` da API de período; 2º: fallback por texto (busca textual não tem o flag)
 function _ehRegistroPreco(e) {
+  if (e.srp === true) return true;
   const txt = ((e.objetoCompra||'') + ' ' + (e.modalidadeNome||'')).toLowerCase();
   return /registro de pre[çc]o|sistema de registro|\bsrp\b|ata de registro|registro de pre[çc]os/.test(txt);
 }
@@ -1880,6 +1888,7 @@ function _thinkingStream() {
 async function executarBuscaComFiltros(f) {
   _ultimoContexto = 'busca';
   const ts = _thinkingStream();
+  _varredura.analisados = 0;
   await ts.setMsg('Aplicando filtros e acessando o PNCP...');
 
   let brutos = [];
@@ -1900,7 +1909,7 @@ async function executarBuscaComFiltros(f) {
   // Busca PROFUNDA: cada portal roda todas as palavras-chave varrendo várias páginas
   for (const pid of portais) {
     const portal = PORTAIS_BUSCA[pid];
-    try { brutos = brutos.concat(await portal.buscar(queries, (m) => ts.setMsg(m))); } catch(e){}
+    try { brutos = brutos.concat(await portal.buscar(queries, (m) => ts.setMsg(m), f)); } catch(e){}
   }
 
   // Remove duplicatas (mesmo número PNCP)
@@ -1932,7 +1941,7 @@ async function executarBuscaComFiltros(f) {
   const futuros = ordenados.filter(e => (e._status||_statusEdital(e))==='futuro');
   const top = ordenados.slice(0, 40);
   let out = `<strong>📋 ${filtrados.length} edital(is) — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
-  out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">${_resumoFiltros(f)} · ${brutos.length} rastreados</div>`;
+  out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">${_resumoFiltros(f)} · ${_varredura.analisados.toLocaleString('pt-BR')} analisados na varredura</div>`;
   for (const e of top) out += formatarEdital(e);
   if (filtrados.length > top.length) out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${filtrados.length}.</div>`;
   addMessage('assistant', out, true);
@@ -2118,32 +2127,64 @@ function toggleDetalhes(id, btn) {
   if (btn) btn.innerHTML = aberto ? '▾ Ver detalhes' : '▴ Ocultar detalhes';
 }
 
+// ── REDE BLINDADA ──
+// Estratégia 0 é o proxy PRÓPRIO do SONNAR na Vercel (/api/pncp) — sem CORS, sem limite
+// de proxy público. Se ainda não estiver publicado (404), é desativado para a sessão e
+// a cadeia de proxies públicos assume. A estratégia que funcionar fica "grudada" e é
+// tentada primeiro nas próximas chamadas (essencial para varreduras de 100+ páginas).
+let _proxyProprioOk = null;   // null = não testado | true/false
+let _estrategiaBoa = -1;      // índice da última estratégia que funcionou
+
 async function fetchPNCP(url) {
-  // Lista de estratégias de conexão, tentadas em ordem
   const estrategias = [
+    // 0) Proxy próprio (Vercel serverless — mais confiável de todos)
+    (s) => fetch('/api/pncp?url=' + encodeURIComponent(url), { signal: s }),
     // 1) Direto (funciona se o PNCP permitir CORS)
-    () => fetch(url),
-    // 2) codetabs — não exige origem autorizada, funciona em qualquer lugar
-    () => fetch('https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url)),
+    (s) => fetch(url, { signal: s }),
+    // 2) codetabs — não exige origem autorizada
+    (s) => fetch('https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url), { signal: s }),
     // 3) allorigins (raw)
-    () => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url)),
-    // 4) corsproxy.io (funciona em github.io e origens autorizadas)
-    () => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url)),
+    (s) => fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal: s }),
+    // 4) corsproxy.io
+    (s) => fetch('https://corsproxy.io/?url=' + encodeURIComponent(url), { signal: s }),
     // 5) thingproxy
-    () => fetch('https://thingproxy.freeboard.io/fetch/' + url),
+    (s) => fetch('https://thingproxy.freeboard.io/fetch/' + url, { signal: s }),
   ];
 
+  // Ordem de tentativa: a que funcionou por último primeiro, depois as demais
+  const ordem = [];
+  if (_estrategiaBoa >= 0) ordem.push(_estrategiaBoa);
+  for (let i = 0; i < estrategias.length; i++) if (!ordem.includes(i)) ordem.push(i);
+
   let ultimoErro = null;
-  for (const tentar of estrategias) {
-    try {
-      const res = await tentar();
-      if (res && res.ok) {
-        const txt = await res.text();
-        if (txt && txt.trim().startsWith('{')) {
-          return JSON.parse(txt);
+  for (let rodada = 0; rodada < 2; rodada++) {          // 2 rodadas = retry com backoff
+    for (const i of ordem) {
+      if (i === 0 && _proxyProprioOk === false) continue; // proxy próprio não publicado
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 25000); // timeout por tentativa
+      try {
+        const res = await estrategias[i](ctl.signal);
+        clearTimeout(timer);
+        if (i === 0 && res && res.status === 404) { _proxyProprioOk = false; continue; }
+        if (res && res.status === 204) {                  // PNCP: 204 = consulta vazia
+          _estrategiaBoa = i; if (i === 0) _proxyProprioOk = true;
+          return { data: [], totalRegistros: 0, totalPaginas: 0 };
         }
-      }
-    } catch(e) { ultimoErro = e; }
+        if (res && res.ok) {
+          const txt = await res.text();
+          if (!txt || !txt.trim()) {                      // corpo vazio = consulta vazia
+            _estrategiaBoa = i; if (i === 0) _proxyProprioOk = true;
+            return { data: [], totalRegistros: 0, totalPaginas: 0 };
+          }
+          const t = txt.trim();
+          if (t.startsWith('{') || t.startsWith('[')) {   // aceita objeto E array (ex: /arquivos)
+            _estrategiaBoa = i; if (i === 0) _proxyProprioOk = true;
+            return JSON.parse(t);
+          }
+        }
+      } catch(e) { clearTimeout(timer); ultimoErro = e; }
+    }
+    await new Promise(r => setTimeout(r, 800));           // backoff entre rodadas
   }
   throw new Error('Todos os métodos de conexão falharam' + (ultimoErro ? ': ' + ultimoErro.message : ''));
 }
@@ -2151,6 +2192,100 @@ async function fetchPNCP(url) {
 // Formato de data exigido pela API do PNCP: AAAAMMDD
 function _fmtDataPNCP(d) {
   return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MOTOR PRINCIPAL — VARREDURA COMPLETA POR PERÍODO (API oficial)
+//  A busca textual (/api/search) rankeia por RELEVÂNCIA e pode omitir
+//  resultados. Este motor usa /contratacoes/proposta, que devolve TODAS
+//  as contratações com proposta em aberto — cobertura total garantida —
+//  e classifica localmente o que é de climatização.
+//  Bônus: este endpoint retorna valorTotalEstimado (a busca textual não)
+//  e o campo srp (Registro de Preço) direto da fonte.
+// ════════════════════════════════════════════════════════════════
+const MODALIDADE_CODES = { pregao:[6,7], concorrencia:[4,5], dispensa:[8], inexigibilidade:[9] };
+const MODALIDADE_NOME  = { 4:'Concorrência Eletrônica', 5:'Concorrência Presencial', 6:'Pregão Eletrônico',
+                           7:'Pregão Presencial', 8:'Dispensa', 9:'Inexigibilidade' };
+
+// Contador global da última varredura (exibido no cabeçalho do resultado)
+let _varredura = { analisados: 0 };
+
+// Pré-filtro barato: é de climatização? (qualquer um dos 5 tipos)
+function _ehClimatizacao(e) { return _classificarSistema(e).length > 0; }
+
+// Coleta TODAS as páginas de uma consulta, em lotes paralelos, guardando só climatização.
+// Cada registro analisado conta em _varredura.analisados (mesmo os descartados).
+async function _varrerPaginado(urlBase, out, onMsg, rotulo, maxPag) {
+  maxPag = maxPag || 100;                                  // trava de sanidade (100 pág × 500 = 50 mil)
+  let tam = 500;                                           // máximo aceito pela API de consulta
+
+  const registrar = (json) => {
+    const regs = (json && json.data) || [];
+    _varredura.analisados += regs.length;
+    for (const r of regs) {
+      const sit = r.situacaoCompraId;
+      if (sit !== undefined && sit !== null && String(sit) !== '1') continue; // revogada/anulada/suspensa
+      if (_ehClimatizacao(r)) out.push(r);
+    }
+    return regs.length;
+  };
+
+  // Página 1 descobre o total; se a API rejeitar 500 por página, cai para 50
+  let p1;
+  try { p1 = await fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=1`); }
+  catch(e) {
+    tam = 50;
+    try { p1 = await fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=1`); } catch(e2) { return; }
+  }
+  registrar(p1);
+  const totalPag = Math.min(p1.totalPaginas || 1, maxPag);
+  if (totalPag <= 1) return;
+
+  // Páginas 2..N em lotes paralelos (mais agressivo quando o proxy próprio está ativo)
+  const conc = (_proxyProprioOk === true) ? 6 : 2;
+  for (let inicio = 2; inicio <= totalPag; inicio += conc) {
+    const lote = [];
+    for (let p = inicio; p < inicio + conc && p <= totalPag; p++) {
+      lote.push(fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=${p}`).then(registrar).catch(() => {}));
+    }
+    try { onMsg(`${rotulo} · pág. ${Math.min(inicio + conc - 1, totalPag)}/${totalPag} · ${_varredura.analisados.toLocaleString('pt-BR')} analisados`); } catch(e){}
+    await Promise.all(lote);
+  }
+}
+
+// Varredura completa: todas as modalidades selecionadas × (UFs escolhidas ou nacional)
+async function buscarPNCPPorPeriodo(f, onMsg) {
+  const hoje = new Date();
+  const dHoje = _fmtDataPNCP(hoje);
+
+  // Modalidades conforme o filtro do usuário (menos modalidades = varredura mais rápida)
+  const chips = (f && f.modalidades && f.modalidades.length) ? f.modalidades : ['pregao','concorrencia','dispensa'];
+  let codes = [];
+  chips.forEach(c => (MODALIDADE_CODES[c] || []).forEach(k => { if (!codes.includes(k)) codes.push(k); }));
+  if (!codes.length) codes = [6, 4, 8];
+
+  // Se o usuário limitou estados (até 8), varre por UF — mais leve e permite incluir futuras
+  const ufs = (f && f.estados && f.estados.length && f.estados.length <= 8) ? f.estados : [null];
+
+  const out = [];
+  for (const code of codes) {
+    for (const uf of ufs) {
+      const rot = `PNCP · ${MODALIDADE_NOME[code] || ('modalidade ' + code)}${uf ? ' · ' + uf : ''}`;
+      // 1) TUDO com proposta em aberto agora (cobertura total)
+      await _varrerPaginado(
+        `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dHoje}&codigoModalidadeContratacao=${code}${uf ? `&uf=${uf}` : ''}`,
+        out, onMsg, rot);
+      // 2) FUTURAS por publicação (últimos 45 dias). Nacional é pesado demais —
+      //    só roda com UF limitada; no modo nacional os futuros vêm da busca textual.
+      if (uf) {
+        const d45 = new Date(hoje.getTime() - 45 * 86400000);
+        await _varrerPaginado(
+          `${PNCP_BASE}/contratacoes/publicacao?dataInicial=${_fmtDataPNCP(d45)}&dataFinal=${dHoje}&codigoModalidadeContratacao=${code}&uf=${uf}`,
+          out, onMsg, rot + ' · futuras', 40);
+      }
+    }
+  }
+  return out;
 }
 
 // Marca o status de um edital com base nas datas de proposta
@@ -2351,7 +2486,19 @@ async function _baixarPDFEdital(p) {
   if (!uri) return null;
   if (uri.startsWith('/')) uri = 'https://pncp.gov.br' + uri;
 
-  // 3) Baixa o binário via proxies CORS e converte p/ base64 (com limite de tamanho)
+  // 3a) Primeiro pelo proxy próprio (devolve o PDF já em base64 — o caminho mais confiável)
+  if (_proxyProprioOk !== false) {
+    try {
+      const r = await fetch('/api/pncp?url=' + encodeURIComponent(uri));
+      if (r.status === 404) { _proxyProprioOk = false; }
+      else if (r.ok) {
+        const j = await r.json();
+        if (j && j._pdfBase64 && j._pdfBase64.length > 100) { _proxyProprioOk = true; return j._pdfBase64; }
+      }
+    } catch(e) { /* cai para os proxies públicos */ }
+  }
+
+  // 3b) Baixa o binário via proxies CORS e converte p/ base64 (com limite de tamanho)
   const proxies = [
     (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
