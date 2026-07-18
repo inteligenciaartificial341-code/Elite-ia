@@ -2278,6 +2278,9 @@ async function _varrerPaginado(urlBase, out, onMsg, rotulo, maxPag) {
 async function buscarPNCPPorPeriodo(f, onMsg) {
   const hoje = new Date();
   const dHoje = _fmtDataPNCP(hoje);
+  // dataFinal do /proposta é o LIMITE FUTURO da janela de encerramento (a API exige >= hoje).
+  // Mandar "hoje" devolve só o que encerra hoje; +365 dias devolve TUDO que está aberto.
+  const dJanela = _fmtDataPNCP(new Date(hoje.getTime() + 365 * 86400000));
 
   // Modalidades conforme o filtro do usuário (menos modalidades = varredura mais rápida)
   const chips = (f && f.modalidades && f.modalidades.length) ? f.modalidades : ['pregao','concorrencia','dispensa'];
@@ -2294,7 +2297,7 @@ async function buscarPNCPPorPeriodo(f, onMsg) {
       const rot = `PNCP · ${MODALIDADE_NOME[code] || ('modalidade ' + code)}${uf ? ' · ' + uf : ''}`;
       // 1) TUDO com proposta em aberto agora (cobertura total)
       await _varrerPaginado(
-        `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dHoje}&codigoModalidadeContratacao=${code}${uf ? `&uf=${uf}` : ''}`,
+        `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dJanela}&codigoModalidadeContratacao=${code}${uf ? `&uf=${uf}` : ''}`,
         out, onMsg, rot);
       // 2) FUTURAS por publicação (últimos 45 dias). Nacional é pesado demais —
       //    só roda com UF limitada; no modo nacional os futuros vêm da busca textual.
@@ -2327,6 +2330,8 @@ function _statusEdital(edital) {
 async function buscarEditaisPNCP(uf, diasFuturos = 45) {
   const hoje = new Date();
   const dataHoje = _fmtDataPNCP(hoje);
+  // dataFinal do /proposta = limite FUTURO da janela de encerramento (API exige >= hoje)
+  const dataJanela = _fmtDataPNCP(new Date(hoje.getTime() + 365 * 86400000));
 
   // 6=Pregão Eletrônico, 8=Dispensa, 4=Concorrência Eletrônica
   const modalidades = [6, 8, 4];
@@ -2337,7 +2342,7 @@ async function buscarEditaisPNCP(uf, diasFuturos = 45) {
     let pagina = 1;
     let totalPaginas = 1;
     while (pagina <= totalPaginas && pagina <= 6) {
-      let url = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataHoje}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
+      let url = `${PNCP_BASE}/contratacoes/proposta?dataFinal=${dataJanela}&codigoModalidadeContratacao=${mod}&tamanhoPagina=50&pagina=${pagina}`;
       if (uf) url += `&uf=${uf}`;
       try {
         const json = await fetchPNCP(url);
@@ -4378,7 +4383,7 @@ function imprimirCotacao(){
 <!-- Overlay de microfone estilo Claude -->
 <div id="mic-overlay">
   <button id="mic-cancel" onclick="cancelVoice()" title="Cancelar">✕</button>
-  <div id="mic-waveform" id="mic-waveform"></div>
+  <div id="mic-waveform"></div>
   <button id="mic-confirm" onclick="confirmVoice()" title="Enviar">✓</button>
 </div>
 
