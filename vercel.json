@@ -6,6 +6,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "api/pncp.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "index.html",
       "use": "@vercel/static"
     }
@@ -14,6 +18,10 @@
     {
       "src": "/api/chat",
       "dest": "/api/chat.js"
+    },
+    {
+      "src": "/api/pncp",
+      "dest": "/api/pncp.js"
     },
     {
       "src": "/(.*)",
