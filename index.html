@@ -1816,6 +1816,8 @@ function _aplicarFiltrosLocais(lista, f) {
     if (_ehExcluidoVeiculo(e)) continue;
     if (e._temResultado === true) continue;                             // já tem vencedor → fora
     if (_ehRegistroPreco(e)) continue;                                  // Registro de Preço → fora (Paulo não quer SRP)
+    if (e._tipoNome && /ato que autoriza/i.test(e._tipoNome)) continue; // dispensa SEM disputa: já contratado, não dá pra entrar
+    if (_ehSoPecas(e)) continue;                                        // fornecimento de peça avulsa → não é obra/serviço
     const tipos = _classificarSistema(e);
     if (!tipos.some(t => tiposSel.has(t))) continue;                    // TIPO (OR dentro da categoria)
     const servs = _classificarServico(e);
@@ -1828,6 +1830,10 @@ function _aplicarFiltrosLocais(lista, f) {
     if (modaisSel.size && !modaisSel.has(_classModalidade(e.modalidadeNome))) continue;  // MODALIDADE
     const st = _statusEdital(e);
     if (st === 'encerrado') continue;
+    if (st === 'indefinido') {                                          // sem data nenhuma:
+      const pn = _parsePNCP(e.numeroControlePNCP || '');
+      if (pn && Number(pn.ano) < agora.getFullYear()) continue;         // de ano anterior = morto, fora
+    }
     if (statusSel.size && !_statusBate(e, st, statusSel, agora, msDia)) continue;          // STATUS
     if (orgaosSel.size && !orgaosSel.has(_tipoOrgao(e))) continue;       // ÓRGÃO
     const id = e.numeroControlePNCP || JSON.stringify(e);
@@ -1845,8 +1851,19 @@ function _ehRegistroPreco(e) {
   const txt = ((e.objetoCompra||'') + ' ' + (e.modalidadeNome||'')).toLowerCase();
   return /registro de pre[çc]o|sistema de registro|\bsrp\b|ata de registro|registro de pre[çc]os/.test(txt);
 }
+// Detecta edital de PEÇA AVULSA (fornecimento/aquisição de peças/componentes) —
+// não é obra nem contrato de manutenção; o termo de clima aparece só como destino
+// ("peças para o chiller do hospital"). Não é negócio para a Elite Ar.
+function _ehSoPecas(e) {
+  const obj = (e.objetoCompra || '').toLowerCase();
+  const ehPecas = /(fornecimento|aquisi[çc][ãa]o|compra)[^.]{0,50}\bde pe[çc]as\b/.test(obj) || /^pe[çc]as\b/.test(obj);
+  if (!ehPecas) return false;
+  const temServicoReal = /manuten[çc][ãa]o|preventiva|corretiva|assist[êe]ncia t[ée]cnica/.test(obj);
+  return !temServicoReal; // peças DENTRO de contrato de manutenção é legítimo
+}
 function _statusBate(e, st, statusSel, agora, msDia) {
   if (st === 'aberto') return statusSel.has('aberto');
+  if (st === 'indefinido') return statusSel.has('aberto'); // pode estar aberto — mostra com badge honesto
   if (st === 'futuro') {
     const ab = e.dataAberturaProposta ? new Date(e.dataAberturaProposta) : null;
     const dias = ab ? Math.ceil((ab - agora) / msDia) : 999;
@@ -1939,8 +1956,9 @@ async function executarBuscaComFiltros(f) {
   const ordenados = ordenarPorUrgencia(filtrados);
   const abertos = ordenados.filter(e => (e._status||_statusEdital(e))==='aberto');
   const futuros = ordenados.filter(e => (e._status||_statusEdital(e))==='futuro');
+  const semData = ordenados.filter(e => (e._status||_statusEdital(e))==='indefinido');
   const top = ordenados.slice(0, 40);
-  let out = `<strong>📋 ${filtrados.length} edital(is) — ${abertos.length} aberto(s) · ${futuros.length} vão abrir</strong>`;
+  let out = `<strong>📋 ${filtrados.length} edital(is) — ${abertos.length} aberto(s) · ${futuros.length} vão abrir${semData.length ? ` · ${semData.length} sem data` : ''}</strong>`;
   out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">${_resumoFiltros(f)} · ${_varredura.analisados.toLocaleString('pt-BR')} analisados na varredura</div>`;
   for (const e of top) out += formatarEdital(e);
   if (filtrados.length > top.length) out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${filtrados.length}.</div>`;
@@ -2172,7 +2190,10 @@ async function fetchPNCP(url) {
         }
         if (res && res.ok) {
           const txt = await res.text();
-          if (!txt || !txt.trim()) {                      // corpo vazio = consulta vazia
+          if (i === 0 && txt && txt.trim().startsWith('<')) {           // proxy devolveu HTML (rota
+            _proxyProprioOk = false; continue;                          // caiu no index.html) → desativa
+          }
+          if (!txt || !txt.trim()) {                                    // corpo vazio = consulta vazia
             _estrategiaBoa = i; if (i === 0) _proxyProprioOk = true;
             return { data: [], totalRegistros: 0, totalPaginas: 0 };
           }
@@ -2289,7 +2310,7 @@ async function buscarPNCPPorPeriodo(f, onMsg) {
 }
 
 // Marca o status de um edital com base nas datas de proposta
-// Retorna: 'aberto' | 'futuro' | 'encerrado'
+// Retorna: 'aberto' | 'futuro' | 'encerrado' | 'indefinido' (sem nenhuma data)
 function _statusEdital(edital) {
   const agora = new Date();
   const abertura = edital.dataAberturaProposta ? new Date(edital.dataAberturaProposta) : null;
@@ -2299,7 +2320,7 @@ function _statusEdital(edital) {
   if (abertura && abertura > agora) return 'futuro';        // ainda vai abrir
   if (encerr && encerr >= agora) return 'aberto';           // recebendo propostas
   if (abertura && abertura <= agora && !encerr) return 'aberto';
-  return 'aberto'; // sem datas claras, assume aberto (veio do endpoint de proposta)
+  return 'indefinido'; // NENHUMA data informada — não dá pra afirmar que está aberto
 }
 
 // Busca SOMENTE editais com proposta em aberto AGORA + os que ainda vão abrir.
@@ -2381,10 +2402,11 @@ async function buscarEditaisPNCP(uf, diasFuturos = 45) {
 
 // Ordena: abertos primeiro (quem encerra antes no topo), depois futuros (quem abre antes no topo)
 function ordenarPorUrgencia(editais) {
+  const peso = { aberto: 0, futuro: 1, indefinido: 2 };
   return editais.slice().sort((a, b) => {
     const sa = a._status || _statusEdital(a);
     const sb = b._status || _statusEdital(b);
-    if (sa !== sb) return sa === 'aberto' ? -1 : 1;
+    if (sa !== sb) return (peso[sa] ?? 3) - (peso[sb] ?? 3);
     if (sa === 'aberto') {
       const ea = a.dataEncerramentoProposta ? new Date(a.dataEncerramentoProposta).getTime() : Infinity;
       const eb = b.dataEncerramentoProposta ? new Date(b.dataEncerramentoProposta).getTime() : Infinity;
@@ -2759,6 +2781,8 @@ function formatarEdital(edital) {
       else txt = `⏳ Abre em ${diasAte} dias`;
     }
     badge = `<span style="display:inline-block;background:#d4860b;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">${txt}</span>`;
+  } else if (status === 'indefinido') {
+    badge = `<span style="display:inline-block;background:#7a8b91;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">❔ Datas não informadas · conferir no edital</span>`;
   }
 
   // ── dados para o dropdown de detalhes ──
