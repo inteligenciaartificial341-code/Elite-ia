@@ -1948,10 +1948,180 @@ async function _enriquecerComDetalhes(lista, f, onMsg) {
   });
 }
 
+// ════════════════════════════════════════════════════════════════
+//  DEEP READ — lê o PDF de editais de objeto genérico atrás de VRF
+//  escondido no Termo de Referência. É a única forma de achar as
+//  licitações que nenhum concorrente enxerga numa busca por palavra.
+//  Custo de API autorizado; o cache evita reler o mesmo edital.
+// ════════════════════════════════════════════════════════════════
+const DEEPREAD_CACHE_KEY = 'sonnar_deepread_v1';
+const DEEPREAD_MAX = 20;          // PDFs lidos por rodada
+const DEEPREAD_CONC = 3;          // leituras simultâneas
+
+function _drCache() { try { return JSON.parse(localStorage.getItem(DEEPREAD_CACHE_KEY)) || {}; } catch(e) { return {}; } }
+function _drSalvar(num, veredito) {
+  try {
+    const c = _drCache();
+    c[num] = { ...veredito, ts: Date.now() };
+    const chaves = Object.keys(c);
+    if (chaves.length > 800) {                     // poda os mais antigos
+      chaves.sort((a,b) => (c[a].ts||0) - (c[b].ts||0)).slice(0, 300).forEach(k => delete c[k]);
+    }
+    localStorage.setItem(DEEPREAD_CACHE_KEY, JSON.stringify(c));
+  } catch(e) {}
+}
+
+const _PROMPT_DEEPREAD = `Você é engenheiro especialista em climatização (VRF/VRV, Split, Splitão/cassete, Chiller) analisando um edital público.
+
+TAREFA: descobrir se este edital inclui, em QUALQUER parte (objeto, Termo de Referência, planilha orçamentária, memorial, anexos), fornecimento/instalação/reforma/manutenção de sistema de CLIMATIZAÇÃO. Muitas vezes isso não aparece no objeto e está só no Termo de Referência.
+
+Responda SOMENTE com um objeto JSON, sem markdown, sem crases, sem texto antes ou depois:
+{"tem": true|false, "tipos": ["vrf"|"split"|"splitao"|"chiller"|"hvac"], "servico": "instalacao"|"manutencao"|"reforma"|"aquisicao", "escopo": "frase curta do que foi encontrado", "trecho": "citação curta do edital (máx 20 palavras)", "item": "número da cláusula/item onde aparece, se houver", "relevancia": 0-100}
+
+Regras:
+- "tem": true SOMENTE se houver escopo real de climatização a ser executado/fornecido. Menção incidental (ex.: "desligar o ar-condicionado durante a obra", "sala climatizada") NÃO conta.
+- "relevancia": quanto o escopo de climatização pesa no contrato — 90+ se é o objeto principal, 40-70 se é uma parte relevante da obra, abaixo de 30 se é acessório.
+- Se não houver nada de climatização, responda {"tem": false, "tipos": [], "servico": "", "escopo": "", "trecho": "", "item": "", "relevancia": 0}`;
+
+// Lê UM edital: baixa o PDF e pede o veredito à IA. Retorna o veredito ou null.
+async function _deepReadEdital(edital) {
+  const num = edital.numeroControlePNCP || '';
+  const p = _parsePNCP(num);
+  if (!p) return null;
+
+  const cache = _drCache();
+  if (cache[num]) return cache[num];               // já lido antes — não gasta de novo
+
+  const pdf = await _baixarPDFEdital(p);
+  if (!pdf) return { erro: 'sem_pdf' };            // não cacheia: pode funcionar numa próxima
+
+  try {
+    const data = await callAnthropicAPI({
+      model: 'claude-sonnet-4-6', max_tokens: 700,
+      messages: [{ role: 'user', content: [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } },
+        { type: 'text', text: _PROMPT_DEEPREAD }
+      ]}]
+    });
+    let txt = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    txt = txt.replace(/```json|```/g, '').trim();
+    const ini = txt.indexOf('{'), fim = txt.lastIndexOf('}');
+    if (ini < 0 || fim < 0) return { erro: 'sem_json' };
+    const v = JSON.parse(txt.slice(ini, fim + 1));
+    _drSalvar(num, v);
+    return v;
+  } catch (e) { return { erro: 'falha_ia' }; }
+}
+
+// Seleciona os candidatos que valem a leitura, respeitando os filtros do usuário
+function _prepararCandidatos(f) {
+  const estadosSel = (f.estados && f.estados.length) ? new Set(f.estados) : null;
+  const modaisSel  = new Set(f.modalidades || []);
+  const statusSel  = new Set(f.status || []);
+  const orgaosSel  = new Set(f.orgaos || []);
+  const precoMin   = Math.max(500000, Number(f.precoMin) || 0);
+  const agora = new Date(), msDia = 86400000;
+  const vistos = new Set(), out = [];
+
+  for (const e of _candidatosGenericos) {
+    const num = e.numeroControlePNCP || '';
+    if (!num || vistos.has(num)) continue;
+    vistos.add(num);
+    if (e.srp === true || _ehRegistroPreco(e)) continue;
+    if (e._temResultado === true) continue;
+    if (_ehSoPecas(e)) continue;
+    const uf = (e.unidadeOrgao?.ufSigla || '').toUpperCase();
+    if (estadosSel && !estadosSel.has(uf)) continue;
+    const v = Number(e.valorTotalEstimado) || 0;
+    if (v > 0 && v < precoMin) continue;                    // obra pequena não comporta VRF nosso
+    if (modaisSel.size && !modaisSel.has(_classModalidade(e.modalidadeNome))) continue;
+    if (orgaosSel.size && !orgaosSel.has(_tipoOrgao(e))) continue;
+    const st = _statusEdital(e);
+    if (st === 'encerrado') continue;
+    if (statusSel.size && st !== 'indefinido' && !_statusBate(e, st, statusSel, agora, msDia)) continue;
+    e._status = st;
+    out.push(e);
+  }
+  // Mais valiosos primeiro (obra grande tem mais chance de ter climatização relevante)
+  return out.sort((a, b) => (Number(b.valorTotalEstimado)||0) - (Number(a.valorTotalEstimado)||0));
+}
+
+// Bloco convidando ao Deep Read, exibido no fim dos resultados da busca
+function _blocoDeepRead() {
+  const f = carregarFiltros();
+  const n = _prepararCandidatos(f).length;
+  if (!n) return '';
+  const naRodada = Math.min(DEEPREAD_MAX, n);
+  return `<div style="background:#f7fbfc;border:1px dashed #b8e0ea;border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13px;">
+      <div style="font-weight:700;color:#11808c;margin-bottom:4px;">🔍 Deep Read — climatização escondida</div>
+      <div style="color:#2a4a50;line-height:1.55;">A varredura separou <b>${n}</b> edital(is) de obra/reforma cujo objeto <b>não cita</b> climatização. A IA pode ler o edital inteiro e achar VRF escondido no Termo de Referência — são as licitações que a concorrência não enxerga.</div>
+      <button onclick="executarDeepRead()" style="margin-top:9px;background:#11808c;color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Vasculhar ${naRodada} Termos de Referência</button>
+      <div style="font-size:11px;color:#6b8a90;margin-top:6px;">Leva alguns minutos e consome créditos da API. Editais já lidos ficam em cache e não são cobrados de novo.</div>
+    </div>`;
+}
+
+// Orquestra a rodada de Deep Read
+async function executarDeepRead() {
+  const f = carregarFiltros();
+  const candidatos = _prepararCandidatos(f);
+  if (!candidatos.length) {
+    addMessage('assistant', 'Não há editais de objeto genérico na última varredura para vasculhar. Rode uma busca nova e tente de novo.');
+    return;
+  }
+  const fila = candidatos.slice(0, DEEPREAD_MAX);
+  const ts = _thinkingStream();
+  await ts.setMsg(`Vasculhando ${fila.length} Termos de Referência...`);
+
+  const achados = [];
+  let lidos = 0, semPdf = 0, doCache = 0;
+  const cacheAntes = _drCache();
+
+  for (let i = 0; i < fila.length; i += DEEPREAD_CONC) {
+    const lote = fila.slice(i, i + DEEPREAD_CONC).map(async (e) => {
+      const jaTinha = !!cacheAntes[e.numeroControlePNCP];
+      const v = await _deepReadEdital(e);
+      lidos++;
+      if (jaTinha) doCache++;
+      if (!v || v.erro) { if (v && v.erro === 'sem_pdf') semPdf++; return; }
+      if (v.tem === true) {
+        e._deepRead = v;
+        e.valorTotalEstimado = e.valorTotalEstimado ?? null;
+        if (e.numeroControlePNCP) _editaisEncontrados[e.numeroControlePNCP] = e;
+        achados.push(e);
+      }
+    });
+    await ts.setMsg(`Lendo editais na íntegra (${Math.min(i + DEEPREAD_CONC, fila.length)}/${fila.length}) · ${achados.length} com climatização`);
+    await Promise.all(lote);
+  }
+  await ts.finish();
+
+  const rodape = `<div style="font-size:11px;color:#6b8a90;margin-top:8px;">${lidos} edital(is) lido(s)`
+    + (doCache ? ` · ${doCache} já analisado(s) antes (sem custo)` : '')
+    + (semPdf ? ` · ${semPdf} sem PDF acessível` : '')
+    + (candidatos.length > fila.length ? ` · ${candidatos.length - fila.length} restante(s) na fila` : '')
+    + `</div>`;
+
+  if (!achados.length) {
+    addMessage('assistant', `🔍 <strong>Deep Read concluído — nenhuma climatização escondida nos ${lidos} editais lidos.</strong>${rodape}`);
+    return;
+  }
+
+  achados.sort((a, b) => (b._deepRead.relevancia || 0) - (a._deepRead.relevancia || 0));
+  let out = `<strong>🔍 Deep Read — ${achados.length} edital(is) com climatização escondida no Termo de Referência</strong>`;
+  out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">Estes não aparecem em busca por palavra-chave.</div>`;
+  for (const e of achados) out += formatarEdital(e);
+  out += rodape;
+  if (candidatos.length > fila.length) {
+    out += `<div style="margin-top:10px;"><button onclick="executarDeepRead()" style="background:#11808c;color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🔍 Vasculhar mais ${Math.min(DEEPREAD_MAX, candidatos.length - fila.length)}</button></div>`;
+  }
+  addMessage('assistant', out, true);
+}
+
 async function executarBuscaComFiltros(f) {
   _ultimoContexto = 'busca';
   const ts = _thinkingStream();
   _varredura.analisados = 0;
+  _candidatosGenericos = [];
   await ts.setMsg('Aplicando filtros e acessando o PNCP...');
 
   let brutos = [];
@@ -2013,6 +2183,7 @@ async function executarBuscaComFiltros(f) {
   out += `<div style="font-size:11px;color:#6b8a90;margin:3px 0 2px;">${_resumoFiltros(f)} · ${_varredura.analisados.toLocaleString('pt-BR')} analisados na varredura</div>`;
   for (const e of top) out += formatarEdital(e);
   if (filtrados.length > top.length) out += `<div style="margin-top:10px;font-size:12px;color:#6b8a90;">Exibindo os ${top.length} mais urgentes de ${filtrados.length}.</div>`;
+  out += _blocoDeepRead();
   addMessage('assistant', out, true);
 }
 
@@ -2285,6 +2456,37 @@ let _varredura = { analisados: 0 };
 // Pré-filtro barato: é de climatização? (qualquer um dos 5 tipos)
 function _ehClimatizacao(e) { return _classificarSistema(e).length > 0; }
 
+// ── DEEP READ: candidatos de objeto GENÉRICO ──
+// Muitos editais bons não citam VRF/Split/Chiller no objeto — a climatização está
+// escondida no Termo de Referência ("reforma da sede", "serviços de engenharia").
+// Esses ficam invisíveis para qualquer concorrente que só busca por palavra-chave.
+// Aqui eles são separados num balde para, sob comando, terem o PDF lido pela IA.
+const _GENERICO_SINAIS = [
+  'reforma','retrofit','revitaliza','moderniza','requalifica','readequa','adequa',
+  'obra','edifica','constru','ampliação','ampliacao','predial','prédio','predio',
+  'engenharia','instalações','instalacoes','infraestrutura','manutenção predial',
+  'manutencao predial','sede','edifício','edificio','conclusão','conclusao'
+];
+// Se tiver qualquer um destes, é outro ramo — nem vale abrir o PDF
+const _GENERICO_RUIDO = [
+  'pavimenta','asfalt','recapea','drenagem','esgoto','saneamento','ponte','viaduto',
+  'praça','praca','quadra','campo de futebol','cemitério','cemiterio','muro','calçada',
+  'calcada','poço','poco','iluminação pública','iluminacao publica','sinaliza','terraplan',
+  'merenda','alimentos','medicamento','combustível','combustivel','veículo','veiculo',
+  'informática','informatica','software','licença de uso','licenca de uso','mobiliário','mobiliario'
+];
+function _ehCandidatoDeepRead(e) {
+  if (_ehClimatizacao(e)) return false;            // já foi achado pelo objeto, não precisa ler
+  if (_ehExcluidoVeiculo(e)) return false;
+  const obj = (e.objetoCompra || '').toLowerCase();
+  if (!obj || obj.length < 25) return false;
+  if (_GENERICO_RUIDO.some(k => obj.includes(k))) return false;
+  return _GENERICO_SINAIS.some(k => obj.includes(k));
+}
+// Balde da última varredura (limitado para não pesar a memória do navegador)
+let _candidatosGenericos = [];
+const _CANDIDATOS_MAX = 400;
+
 // Coleta as páginas de uma consulta DE TRÁS PARA FRENTE, em lotes paralelos.
 // POR QUÊ: a API do PNCP ordena do registro mais ANTIGO para o mais NOVO — os
 // editais recentes ficam nas ÚLTIMAS páginas. Varrendo de trás pra frente, o que
@@ -2309,6 +2511,9 @@ async function _varrerPaginado(urlBase, out, onMsg, rotulo, maxPag) {
       const sit = r.situacaoCompraId;
       if (sit !== undefined && sit !== null && String(sit) !== '1') continue; // revogada/anulada/suspensa
       if (_ehClimatizacao(r)) out.push(r);
+      else if (_candidatosGenericos.length < _CANDIDATOS_MAX && _ehCandidatoDeepRead(r)) {
+        _candidatosGenericos.push(r);                        // objeto genérico → candidato a Deep Read
+      }
     }
     return maisNova;
   };
@@ -2854,9 +3059,17 @@ function formatarEdital(edital) {
     badge = `<span style="display:inline-block;background:#7a8b91;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">❔ Datas não informadas · conferir no edital</span>`;
   }
 
+  // Selo extra: achado pela leitura do PDF (não aparecia em busca por palavra)
+  if (edital._deepRead) {
+    badge += ` <span style="display:inline-block;background:#11808c;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px;">🔍 Achado no Termo de Referência</span>`;
+  }
+
   // ── dados para o dropdown de detalhes ──
   const idSafe = 'det_' + (numero.replace(/[^a-zA-Z0-9]/g,'') || Math.random().toString(36).slice(2));
-  const tiposDet = _classificarSistema(edital).map(t=>TIPO_ROTULO[t]||t).join(', ') || '—';
+  const _dr = edital._deepRead || null;
+  const tiposDet = (_dr && _dr.tipos && _dr.tipos.length
+      ? _dr.tipos.map(t=>TIPO_ROTULO[t]||t)
+      : _classificarSistema(edital).map(t=>TIPO_ROTULO[t]||t)).join(', ') || '—';
   const servDet = (edital._servicos || _classificarServico(edital)).map(s=>SERVICO_ROTULO[s]||s).join(', ') || '—';
   const prazo = _prazoTexto(edital);
   const prop = _calcularProposta(edital.valorTotalEstimado);
@@ -2888,6 +3101,13 @@ function formatarEdital(edital) {
           <div>💰 <b>Proposta média sugerida:</b> ${propHtml}</div>
           <div>🏛️ <b>Órgão:</b> ${orgao}${municipio ? ' · '+municipio : ''}/${uf}</div>
           <div>📑 <b>Modalidade:</b> ${modalidade}</div>
+          ${_dr ? `<div style="background:#eef8f1;border:1px solid #bfe3cb;border-radius:7px;padding:8px 10px;margin:2px 0 6px;">
+            <div style="font-weight:700;color:#1f7a4d;">🔍 Encontrado pela IA dentro do edital</div>
+            <div><b>Escopo:</b> ${_dr.escopo || '—'}</div>
+            ${_dr.item ? `<div><b>Onde:</b> item ${_dr.item}</div>` : ''}
+            ${_dr.trecho ? `<div style="color:#3d5a52;font-style:italic;">"${_dr.trecho}"</div>` : ''}
+            <div style="font-size:11px;color:#6b8a90;">Relevância da climatização no contrato: ${_dr.relevancia ?? '—'}/100 · confira no PDF antes de decidir</div>
+          </div>` : ''}
           <div>🧩 <b>Tipo de sistema:</b> ${tiposDet}</div>
           <div>🔧 <b>Tipo de serviço:</b> ${servDet}</div>
           <div style="color:#6b8a90;margin-top:4px;">📋 Documentação exigida, qualificação técnica (CREA/ART), responsável técnico e prazo de execução: toque em <b>"Como entrar"</b> para a ficha completa gerada pela IA.</div>
