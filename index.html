@@ -2234,43 +2234,56 @@ let _varredura = { analisados: 0 };
 // Pré-filtro barato: é de climatização? (qualquer um dos 5 tipos)
 function _ehClimatizacao(e) { return _classificarSistema(e).length > 0; }
 
-// Coleta TODAS as páginas de uma consulta, em lotes paralelos, guardando só climatização.
-// Cada registro analisado conta em _varredura.analisados (mesmo os descartados).
+// Coleta as páginas de uma consulta DE TRÁS PARA FRENTE, em lotes paralelos.
+// POR QUÊ: a API do PNCP ordena do registro mais ANTIGO para o mais NOVO — os
+// editais recentes ficam nas ÚLTIMAS páginas. Varrendo de trás pra frente, o que
+// interessa chega primeiro e o entulho antigo (2023/2024 com datas fantasma) nem
+// precisa ser lido: quando um lote inteiro fica mais velho que a janela de
+// frescor, tudo dali para trás é mais antigo ainda e a varredura para.
+const _FRESCOR_DIAS = 185; // ~6 meses: publicação mais velha que isso é entulho/cadastro errado
+
 async function _varrerPaginado(urlBase, out, onMsg, rotulo, maxPag) {
-  maxPag = maxPag || 100;                                  // trava de sanidade (100 pág × 500 = 50 mil)
-  let tam = 500;                                           // máximo aceito pela API de consulta
+  maxPag = maxPag || 200;                 // teto de páginas LIDAS (o corte de frescor para antes)
+  const tam = 50;                          // máximo aceito pela API de consulta (500 é rejeitado)
+  const corte = Date.now() - _FRESCOR_DIAS * 86400000;
 
   const registrar = (json) => {
     const regs = (json && json.data) || [];
     _varredura.analisados += regs.length;
+    let maisNova = 0;                                       // publicação mais recente do lote
     for (const r of regs) {
+      const pub = r.dataPublicacaoPncp ? new Date(r.dataPublicacaoPncp).getTime() : 0;
+      if (pub > maisNova) maisNova = pub;
+      if (pub && pub < corte) continue;                     // publicado há 6+ meses = fora
       const sit = r.situacaoCompraId;
       if (sit !== undefined && sit !== null && String(sit) !== '1') continue; // revogada/anulada/suspensa
       if (_ehClimatizacao(r)) out.push(r);
     }
-    return regs.length;
+    return maisNova;
   };
 
-  // Página 1 descobre o total; se a API rejeitar 500 por página, cai para 50
+  // Página 1 serve só para descobrir o total de páginas
   let p1;
-  try { p1 = await fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=1`); }
-  catch(e) {
-    tam = 50;
-    try { p1 = await fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=1`); } catch(e2) { return; }
-  }
+  try { p1 = await fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=1`); } catch(e) { return; }
+  const totalPag = p1.totalPaginas || 1;
   registrar(p1);
-  const totalPag = Math.min(p1.totalPaginas || 1, maxPag);
   if (totalPag <= 1) return;
 
-  // Páginas 2..N em lotes paralelos (mais agressivo quando o proxy próprio está ativo)
+  // Da ÚLTIMA página para trás, até esfriar ou bater o teto
   const conc = (_proxyProprioOk === true) ? 6 : 2;
-  for (let inicio = 2; inicio <= totalPag; inicio += conc) {
+  let lidas = 0;
+  for (let fim = totalPag; fim >= 2 && lidas < maxPag; fim -= conc) {
+    const inicio = Math.max(2, fim - conc + 1);
     const lote = [];
-    for (let p = inicio; p < inicio + conc && p <= totalPag; p++) {
-      lote.push(fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=${p}`).then(registrar).catch(() => {}));
+    for (let p = fim; p >= inicio; p--) {
+      lote.push(fetchPNCP(`${urlBase}&tamanhoPagina=${tam}&pagina=${p}`).then(registrar).catch(() => 0));
+      lidas++;
     }
-    try { onMsg(`${rotulo} · pág. ${Math.min(inicio + conc - 1, totalPag)}/${totalPag} · ${_varredura.analisados.toLocaleString('pt-BR')} analisados`); } catch(e){}
-    await Promise.all(lote);
+    try { onMsg(`${rotulo} · pág. ${inicio}–${fim} de ${totalPag} · ${_varredura.analisados.toLocaleString('pt-BR')} analisados`); } catch(e){}
+    const frescor = await Promise.all(lote);
+    // Lote inteiro mais velho que a janela → o resto é mais antigo ainda, pode parar
+    const validos = frescor.filter(n => n > 0);
+    if (validos.length && validos.every(n => n < corte)) break;
   }
 }
 
