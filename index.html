@@ -1902,6 +1902,52 @@ function _thinkingStream() {
 }
 
 // ── Executor da busca COM filtros ──
+// ── ENRIQUECIMENTO PÓS-FILTRO ──
+// A varredura e a busca textual nem sempre trazem o valor estimado. Em vez de varrer
+// centenas de páginas atrás dele, busca-se o DETALHE oficial apenas dos editais que
+// PASSARAM nos filtros (uma requisição por edital). Com o dado em mãos:
+//   · o piso de R$ 500 mil é reaplicado de verdade;
+//   · SRP descoberto no detalhe é cortado;
+//   · datas que faltavam entram (e "sem data" pode virar aberto/futuro — ou encerrado, e sai);
+//   · todos os cards exibidos passam a mostrar o valor em R$.
+async function _enriquecerComDetalhes(lista, f, onMsg) {
+  const alvos = lista.filter(e =>
+    (e.valorTotalEstimado === null || e.valorTotalEstimado === undefined) &&
+    _parsePNCP(e.numeroControlePNCP || ''));
+  const MAX = 60;                                       // teto de segurança (exibimos 40)
+  const fila = alvos.slice(0, MAX);
+  if (fila.length) {
+    const conc = (_proxyProprioOk === true) ? 6 : 2;
+    for (let i = 0; i < fila.length; i += conc) {
+      const lote = fila.slice(i, i + conc).map(async (e) => {
+        try {
+          const det = await _fetchDetalhePNCP(_parsePNCP(e.numeroControlePNCP));
+          if (!det) return;
+          if (det.valorTotalEstimado != null) e.valorTotalEstimado = det.valorTotalEstimado;
+          if (det.srp === true) e.srp = true;
+          if (!e.dataAberturaProposta && det.dataAberturaProposta) e.dataAberturaProposta = det.dataAberturaProposta;
+          if (!e.dataEncerramentoProposta && det.dataEncerramentoProposta) e.dataEncerramentoProposta = det.dataEncerramentoProposta;
+          if (det.linkSistemaOrigem && !e.linkSistemaOrigem) e.linkSistemaOrigem = det.linkSistemaOrigem;
+          if (e.numeroControlePNCP) _editaisEncontrados[e.numeroControlePNCP] = e;
+        } catch(err) { /* segue sem o detalhe */ }
+      });
+      try { onMsg(`Buscando valores oficiais (${Math.min(i + conc, fila.length)}/${fila.length})...`); } catch(e){}
+      await Promise.all(lote);
+    }
+  }
+  // Reaplica os cortes com os dados novos
+  const precoMin = Math.max(500000, Number(f.precoMin) || 0);
+  return lista.filter(e => {
+    if (e.srp === true) return false;                   // Registro de Preço descoberto no detalhe
+    const v = Number(e.valorTotalEstimado) || 0;
+    if (v > 0 && v < precoMin) return false;            // agora o piso morde de verdade
+    const st = _statusEdital(e);                        // datas novas podem mudar o status
+    e._status = st;
+    if (st === 'encerrado') return false;
+    return true;
+  });
+}
+
 async function executarBuscaComFiltros(f) {
   _ultimoContexto = 'busca';
   const ts = _thinkingStream();
@@ -1945,7 +1991,12 @@ async function executarBuscaComFiltros(f) {
   }
 
   await ts.setMsg(`Analisando ${brutos.length} editais e aplicando filtros...`);
-  const filtrados = _aplicarFiltrosLocais(brutos, f);
+  let filtrados = _aplicarFiltrosLocais(brutos, f);
+  // Urgentes primeiro — são eles que serão enriquecidos e exibidos
+  filtrados = ordenarPorUrgencia(filtrados);
+  // ENRIQUECIMENTO: busca o detalhe oficial SÓ dos selecionados sem valor
+  // (poucas requisições; com isso o piso de R$ 500 mil vale para todos os cards)
+  try { filtrados = await _enriquecerComDetalhes(filtrados, f, (m) => ts.setMsg(m)); } catch(e){}
   await ts.finish();
 
   if (filtrados.length === 0) {
